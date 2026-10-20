@@ -2,6 +2,8 @@ package com.delivery.tenant.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.domain.Persistable;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -13,10 +15,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Tenant {
+public class Tenant implements Persistable<UUID> {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @Column(nullable = false)
@@ -38,7 +39,7 @@ public class Tenant {
     private String secondaryColor = "#F43F5E";
 
     @Builder.Default
-    private BigDecimal deliveryFee = new BigDecimal("7.50");
+    private BigDecimal deliveryFee = new BigDecimal("6.90");
 
     @Builder.Default
     private Integer deliveryTimeMin = 40;
@@ -55,4 +56,26 @@ public class Tenant {
 
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Transient
+    @Builder.Default
+    private boolean isNew = true;
+
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
+
+    @PrePersist
+    public void prePersist() {
+        if (this.id == null) {
+            this.id = UUID.randomUUID();
+        }
+    }
+
+    @PostPersist
+    @PostLoad
+    void markNotNew() {
+        this.isNew = false;
+    }
 }
