@@ -1,104 +1,106 @@
 # 🚀 Delivery Marketplace Multi-tenant
 
-Sistema completo de marketplace de delivery construído com **Backend em Microsserviços (Java 21 / Spring Boot 3)** e **Frontend Único (Next.js 16 / TypeScript / Tailwind CSS)**, cobrindo os 4 perfis da plataforma: **Cliente**, **Vendedor**, **Entregador** e **Administrador**.
+Plataforma completa de delivery com **Backend em Microsserviços (Java 21 / Spring Boot 3)** e **Frontend Único (Next.js 16 / TypeScript / Tailwind CSS)**, cobrindo os 4 perfis do ecossistema: **Cliente**, **Vendedor**, **Entregador** e **Administrador**.
 
 ---
 
-## 🏗️ Arquitetura do Projeto
+## 📁 Estrutura de Diretórios da Raiz
+
+O projeto é organizado com backend e frontend claramente separados no mesmo repositório:
 
 ```text
 delivery-marketplace/
-├── apps/
-│   └── web/                    # 🌐 Frontend Único (Next.js, TypeScript, Tailwind)
-│       ├── src/app/
-│       │   ├── page.tsx               # Hub Central de Demonstração
-│       │   ├── loja/[slug]/page.tsx   # App do Cliente (White-label por slug)
-│       │   ├── vendedor/page.tsx      # Portal do Vendedor (Kanban cozinha em tempo real)
-│       │   ├── entregador/page.tsx    # App do Entregador (Ofertas e despacho)
-│       │   └── admin/page.tsx         # Painel Master Admin (Lojas e métricas)
-│       └── src/lib/api.ts             # Cliente de API com fallback para desenvolvimento
-├── services/                   # ☕ Microsserviços (Java 21 / Spring Boot 3)
+│
+├── 🌐 frontend/                # PROJETO ÚNICO FRONTEND (Next.js 16, TypeScript, Tailwind CSS)
+│   ├── src/app/
+│   │   ├── page.tsx            # Hub Geral com atalhos para todos os perfis
+│   │   ├── loja/[slug]/        # App do Cliente (White-label dinâmico, carrinho, checkout Pix/Cartão, rastreio)
+│   │   ├── vendedor/           # Portal do Vendedor (Kanban de pedidos em tempo real e estoque)
+│   │   ├── entregador/         # App do Entregador (Online/Offline, ofertas, rota de coleta e entrega)
+│   │   └── admin/              # Painel Master Admin (GMV, comissões de 12%, gestão de lojas)
+│   ├── src/lib/api.ts          # Cliente de API integrado ao Gateway com fallback
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── ☕ backend/                 # PROJETO BACKEND EM MICROSSERVIÇOS (Java 21 / Spring Boot 3)
+│   ├── pom.xml                 # Aggregator Maven raiz (compila todos os microsserviços juntos)
+│   ├── mvnw / mvnw.cmd         # Maven Wrapper raiz
 │   ├── api-gateway/            # Porta 8080 - Spring Cloud Gateway e CORS
-│   ├── identity-service/       # Porta 8081 - Autenticação, usuários e JWT
-│   ├── tenant-service/         # Porta 8082 - Lojas, slugs e temas dinâmicos
-│   ├── catalog-service/        # Porta 8083 - Categorias, pratos e estoque
+│   ├── identity-service/       # Porta 8081 - Autenticação, usuários, papéis e JWT
+│   ├── tenant-service/         # Porta 8082 - Lojas, slugs, temas dinâmicos e taxas
+│   ├── catalog-service/        # Porta 8083 - Categorias, pratos, adicionais e estoque
 │   └── order-service/          # Porta 8084 - Máquina de estados e Saga do pedido
-├── docker/
-│   └── init-db.sql             # Script de criação dos bancos isolados por serviço
-├── docs/
-│   └── arquitetura.md          # Especificação detalhada da arquitetura
-├── docker-compose.yml          # PostgreSQL 16, Redis 7 e Kafka (Redpanda)
-└── README.md
+│
+├── 🐳 docker/                  # Recursos e scripts do Docker
+│   └── init-db.sql             # Criação dos bancos isolados por serviço (database-per-service)
+│
+├── 📄 docs/                    # Documentação do Projeto
+│   └── arquitetura.md          # Especificação técnica completa da arquitetura
+│
+├── 🐳 docker-compose.yml       # PostgreSQL 16, Redis 7 e Kafka (Redpanda)
+├── 📝 README.md                # Este guia
+└── ⚙️ .gitignore
 ```
 
 ---
 
-## ⚡ Como Rodar o Frontend (Aplicação Web Única)
+## 🌐 Como Rodar o Frontend
 
-O frontend foi desenvolvido para rodar de forma independente e com visualização imediata, integrando automaticamente com os microsserviços via API Gateway na porta 8080:
+O frontend é um projeto independente. Para iniciar:
 
-```bash
-cd apps/web
+```powershell
+cd frontend
 npm run dev
 ```
 
-Abra [http://localhost:3000](http://localhost:3000) no seu navegador.
+Abra **[http://localhost:3000](http://localhost:3000)** no navegador.
 
-### Rotas disponíveis no Frontend:
-| Rota | Descrição |
-|---|---|
-| `/` | **Hub Central:** Visão geral e atalhos rápidos para todos os papéis |
-| `/loja/pizzaria-do-joao` | **App Cliente:** Cardápio com tema Carmim, carrinho retrátil, checkout Pix/Cartão e rastreio |
-| `/loja/burger-artesanal` | **App Cliente:** Tema Âmbar com Smash burgers |
-| `/loja/sushi-prime` | **App Cliente:** Tema Slate com combinados japoneses |
-| `/vendedor` | **Painel Vendedor:** Kanban de pedidos em tempo real (Recebidos, Cozinha, Prontos) e estoque |
-| `/entregador` | **App Entregador:** Toggle Online, ofertas de corridas, rota de coleta e entrega |
-| `/admin` | **Painel Admin:** Métricas de GMV, taxas de comissão (12%) e suspensão de lojas |
-
----
-
-## ☕ Como Rodar os Microsserviços Backend (Java 21 / Spring Boot)
-
-Cada serviço possui seu próprio Maven Wrapper (`mvnw`), podendo ser executado diretamente pelo terminal ou importado na sua IDE (VS Code, IntelliJ IDEA, Eclipse):
-
-### 1. Iniciar o API Gateway (Porta 8080):
-```bash
-cd services/api-gateway
-./mvnw spring-boot:run
-```
-
-### 2. Iniciar o Identity Service (Porta 8081):
-```bash
-cd services/identity-service
-./mvnw spring-boot:run
-```
-
-### 3. Iniciar o Tenant Service (Porta 8082):
-```bash
-cd services/tenant-service
-./mvnw spring-boot:run
-```
-
-### 4. Iniciar o Catalog Service (Porta 8083):
-```bash
-cd services/catalog-service
-./mvnw spring-boot:run
-```
-
-### 5. Iniciar o Order Service (Porta 8084):
-```bash
-cd services/order-service
-./mvnw spring-boot:run
-```
-
-> **Nota:** Para desenvolvimento local rápido, todos os microsserviços estão configurados com banco em memória H2 por padrão com pré-população de dados (seeders), permitindo que você os execute sem precisar de banco externo pré-configurado!
+### Páginas do Frontend:
+| Rota | Perfil | Descrição |
+|---|---|---|
+| `/` | **Hub Central** | Apresentação e atalhos rápidos para alternar entre os perfis |
+| `/loja/pizzaria-do-joao` | **Cliente** | Cardápio tema Carmim, carrinho retrátil, checkout Pix/Cartão e rastreio |
+| `/loja/burger-artesanal` | **Cliente** | Cardápio tema Âmbar (Smash Burgers) |
+| `/loja/sushi-prime` | **Cliente** | Cardápio tema Slate (Combinados japoneses) |
+| `/vendedor` | **Vendedor** | Kanban da cozinha (Recebidos, Preparo, Prontos), estoque e abertura da loja |
+| `/entregador` | **Entregador** | Toggle Online/Offline, ofertas disponíveis, coleta e entrega com PIN |
+| `/admin` | **Admin** | Métricas financeiras (GMV, comissões de 12%), suspensão e aprovação de lojas |
 
 ---
 
-## 🐳 Infraestrutura com Docker (Opcional para Produção)
+## ☕ Como Rodar o Backend (Microsserviços Java 21)
 
-Para subir o PostgreSQL 16 com bancos isolados por serviço, Redis e Kafka (Redpanda):
+Você pode compilar todos os serviços de uma vez a partir da pasta `backend`:
 
-```bash
+```powershell
+cd backend
+.\mvnw.cmd test-compile -DskipTests
+```
+
+Para rodar qualquer microsserviço individualmente:
+
+```powershell
+# Exemplo: API Gateway (Porta 8080)
+cd backend\api-gateway
+.\mvnw.cmd spring-boot:run
+
+# Exemplo: Tenant Service (Porta 8082)
+cd backend\tenant-service
+.\mvnw.cmd spring-boot:run
+
+# Exemplo: Order Service (Porta 8084)
+cd backend\order-service
+.\mvnw.cmd spring-boot:run
+```
+
+> **Banco de Dados em Desenvolvimento:** Todos os microsserviços possuem o banco em memória H2 configurado por padrão com seeders de dados automáticos, funcionando imediatamente sem precisar de configurações prévias.
+
+---
+
+## 🐳 Infraestrutura com Docker (PostgreSQL, Redis e Kafka)
+
+Para subir o banco PostgreSQL 16 (com bancos separados `identity_db`, `tenant_db`, `catalog_db`, `order_db`), Redis e Kafka (Redpanda):
+
+```powershell
 docker compose up -d
 ```

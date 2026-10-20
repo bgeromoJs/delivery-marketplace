@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.delivery</groupId>
+    <artifactId>delivery-backend-parent</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+    <name>delivery-backend-parent</name>
+    <description>Parent Aggregator para os Microsserviços de Delivery</description>
+
+    <modules>
+        <module>api-gateway</module>
+        <module>identity-service</module>
+        <module>tenant-service</module>
+        <module>catalog-service</module>
+        <module>order-service</module>
+    </modules>
+
+</project>
