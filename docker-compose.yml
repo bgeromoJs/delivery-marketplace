@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # Banco de Dados Relacional - PostgreSQL 16
+  postgres:
+    image: postgres:16-alpine
+    container_name: delivery-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Cache e Sessões - Redis 7
+  redis:
+    image: redis:7-alpine
+    container_name: delivery-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Event Bus / Mensageria - Redpanda (Kafka Drop-in Replacement leve)
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: delivery-redpanda
+    restart: always
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 512M
+      - --overprovisioned
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+      - "9644:9644"
+
+volumes:
+  postgres_data:
+  redis_data:
