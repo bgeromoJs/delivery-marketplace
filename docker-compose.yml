@@ -1,11 +1,26 @@
-version: '3.8'
+# Kit de desenvolvimento do Delivery Marketplace.
+#
+# Modo padrão (apenas infraestrutura):
+#   docker compose up -d
+#
+# Tudo em containers (infra + 5 serviços + frontend):
+#   docker compose --profile apps up -d --build
+#
+# O profile "apps" está descrito no fim do arquivo. As variáveis vêm do .env
+# na raiz (copie .env.example).
+
+name: delivery-marketplace
 
 services:
+  # ==========================================================================
+  # Infraestrutura — sobe em qualquer modo
+  # ==========================================================================
+
   # Banco de Dados Relacional - PostgreSQL 16
   postgres:
     image: postgres:16-alpine
     container_name: delivery-postgres
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
@@ -13,28 +28,34 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      # Só executa quando o volume está vazio (primeira subida ou "down -v").
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  # Cache e Sessões - Redis 7
+  # Cache e Sessões - Redis 7 (provisionado, ainda não usado pelo código)
   redis:
     image: redis:7-alpine
     container_name: delivery-redis
-    restart: always
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   # Event Bus / Mensageria - Redpanda (Kafka Drop-in Replacement leve)
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: delivery-redpanda
-    restart: always
+    restart: unless-stopped
     command:
       - redpanda start
       - --smp 1
@@ -45,6 +66,205 @@ services:
     ports:
       - "19092:19092"
       - "9644:9644"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  # Console web para inspecionar os tópicos/eventos (ex.: order-events)
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    container_name: delivery-redpanda-console
+    restart: unless-stopped
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "8085:8080"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+
+  # Cria o tópico usado pelo order-service antes de qualquer publicação.
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: delivery-redpanda-init
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["rpk topic create order-events --brokers redpanda:9092 || true"]
+    restart: "no"
+
+  # ==========================================================================
+  # Aplicações — profile "apps"
+  #
+  # Usam os nomes de serviço do Compose (postgres, redpanda, tenant-service...)
+  # em vez de localhost. Para rodar as apps nativamente no host, não use este
+  # profile: elas continuam apontando para localhost por padrão.
+  # ==========================================================================
+
+  identity-service:
+    profiles: ["apps"]
+    build:
+      context: ./backend/identity-service
+    image: delivery/identity-service:dev
+    container_name: delivery-identity
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/identity_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgrespassword
+      JWT_SECRET: ${JWT_SECRET:-deliveryhub-local-only-secret-key-change-before-deploy-2026}
+      APP_SEED_DEMO_DATA: ${APP_SEED_DEMO_DATA:-false}
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
+  tenant-service:
+    profiles: ["apps"]
+    build:
+      context: ./backend/tenant-service
+    image: delivery/tenant-service:dev
+    container_name: delivery-tenant
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tenant_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgrespassword
+      APP_SEED_DEMO_DATA: ${APP_SEED_DEMO_DATA:-false}
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
+  catalog-service:
+    profiles: ["apps"]
+    build:
+      context: ./backend/catalog-service
+    image: delivery/catalog-service:dev
+    container_name: delivery-catalog
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/catalog_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgrespassword
+      SERVICES_TENANT_URL: http://tenant-service:8082
+      APP_SEED_DEMO_DATA: ${APP_SEED_DEMO_DATA:-false}
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tenant-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
+  order-service:
+    profiles: ["apps"]
+    build:
+      context: ./backend/order-service
+    image: delivery/order-service:dev
+    container_name: delivery-order
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/order_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgrespassword
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
+      SERVICES_TENANT_URL: http://tenant-service:8082
+      SERVICES_CATALOG_URL: http://catalog-service:8083
+      APP_SEED_DEMO_DATA: ${APP_SEED_DEMO_DATA:-false}
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tenant-service:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
+  api-gateway:
+    profiles: ["apps"]
+    build:
+      context: ./backend/api-gateway
+    image: delivery/api-gateway:dev
+    container_name: delivery-gateway
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-deliveryhub-local-only-secret-key-change-before-deploy-2026}
+      IDENTITY_SERVICE_URL: http://identity-service:8081
+      TENANT_SERVICE_URL: http://tenant-service:8082
+      CATALOG_SERVICE_URL: http://catalog-service:8083
+      ORDER_SERVICE_URL: http://order-service:8084
+    ports:
+      - "8080:8080"
+    depends_on:
+      identity-service:
+        condition: service_healthy
+      tenant-service:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
+  web:
+    profiles: ["apps"]
+    build:
+      context: ./frontend
+      args:
+        # Embutido no bundle do browser em tempo de build.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    image: delivery/web:dev
+    container_name: delivery-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
 volumes:
   postgres_data:

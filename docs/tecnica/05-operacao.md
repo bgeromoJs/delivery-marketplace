@@ -217,6 +217,46 @@ cd ..\cliente-android
 - O build `debug` permite cleartext HTTP; o `release` usa HTTPS e `usesCleartextTraffic=false`.
 - O app precisa de rede local acessível e firewall liberado na porta `8080`.
 
+### 3.7 Ambiente completo em containers
+
+**Implementado.** O `docker-compose.yml` tem dois modos. O modo padrão sobe só a infraestrutura; o profile `apps` sobe também os cinco serviços e o frontend, construindo as imagens a partir dos submódulos.
+
+```powershell
+# Infraestrutura apenas (apps rodando nativamente, como em 3.2–3.5)
+docker compose up -d
+
+# Tudo em containers
+docker compose --profile apps up -d --build
+
+# Atalhos equivalentes
+.\scripts\dev.ps1 infra
+.\scripts\dev.ps1 apps
+```
+
+Antes da primeira subida, copie as variáveis:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+No modo `apps`, os serviços falam entre si pelos nomes do Compose (`postgres`, `redpanda`, `tenant-service`) e não por `localhost`. Isso é feito por variáveis de ambiente, sem alterar o código:
+
+| Serviço | Variável | Valor no Compose |
+|---|---|---|
+| identity, tenant, catalog, order | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://postgres:5432/<serviço>_db` |
+| order | `KAFKA_BOOTSTRAP_SERVERS` | `redpanda:9092` |
+| order | `SERVICES_TENANT_URL` / `SERVICES_CATALOG_URL` | `http://tenant-service:8082` / `http://catalog-service:8083` |
+| catalog | `SERVICES_TENANT_URL` | `http://tenant-service:8082` |
+| gateway | `IDENTITY_SERVICE_URL`, `TENANT_SERVICE_URL`, `CATALOG_SERVICE_URL`, `ORDER_SERVICE_URL` | nomes dos serviços |
+| web | `NEXT_PUBLIC_API_URL` (build arg) | `http://localhost:8080` |
+
+Pontos de atenção:
+
+- **`NEXT_PUBLIC_API_URL` é embutido no bundle em tempo de build.** Mudar a URL exige `docker compose --profile apps build web`.
+- **`docker/init-db.sql` só roda com o volume vazio.** Para recriar os bancos, use `.\scripts\dev.ps1 reset` (equivale a `down -v` + `up -d`).
+- **O modo `apps` não tem hot reload.** Para desenvolvimento diário, prefira a infraestrutura em container e as aplicações nativas; use o profile `apps` para validar o fluxo completo e para onboarding.
+- As portas `8081`–`8084` continuam publicadas para acesso direto ao Swagger de cada serviço. Fora do ambiente local, apenas `8080` deveria ser exposta.
+
 ---
 
 ## 4. Variáveis de ambiente

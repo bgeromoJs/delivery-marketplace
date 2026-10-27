@@ -114,7 +114,7 @@ cd backend\order-service
 .\mvnw.cmd spring-boot:run
 ```
 
-> **Banco de Dados em Desenvolvimento:** Todos os microsserviços possuem o banco em memória H2 configurado por padrão com seeders de dados automáticos, funcionando imediatamente sem precisar de configurações prévias.
+> **Banco de Dados em Desenvolvimento:** os serviços usam **PostgreSQL 16** com migrações Liquibase (`ddl-auto: validate`). Suba a infraestrutura com `docker compose up -d` antes de iniciar qualquer serviço.
 
 ### 📘 Documentação das APIs (Swagger / OpenAPI)
 
@@ -139,11 +139,42 @@ em **Authorize**.
 
 ## 🐳 Infraestrutura com Docker (PostgreSQL, Redis e Kafka)
 
-Para subir o banco PostgreSQL 16 (com bancos separados `identity_db`, `tenant_db`, `catalog_db`, `order_db`), Redis e Kafka (Redpanda):
+O kit tem dois modos. Copie as variáveis antes da primeira subida:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+### Modo padrão — só infraestrutura
+
+Sobe PostgreSQL 16 (com os bancos `identity_db`, `tenant_db`, `catalog_db`, `order_db`), Redis e Kafka (Redpanda). Use quando for rodar os serviços nativamente, com hot reload:
 
 ```powershell
 docker compose up -d
+# equivalente a
+.\scripts\dev.ps1 infra
 ```
+
+### Modo completo — tudo em containers
+
+Sobe também os 5 serviços e o frontend, construindo as imagens a partir dos submódulos:
+
+```powershell
+docker compose --profile apps up -d --build
+# equivalente a
+.\scripts\dev.ps1 apps
+```
+
+| Endereço | O que é |
+|---|---|
+| http://localhost:3000 | Frontend web |
+| http://localhost:8080 | API Gateway |
+| http://localhost:8080/swagger-ui.html | Swagger agregado |
+| http://localhost:8085 | Console do Redpanda |
+
+Comandos úteis: `.\scripts\dev.ps1 reset` (recria os bancos), `.\scripts\dev.ps1 logs`, `.\scripts\dev.ps1 down`.
+
+> O modo `apps` **não tem hot reload** e `NEXT_PUBLIC_API_URL` é embutido no bundle em tempo de build. Para o dia a dia, prefira o modo padrão com os serviços nativos.
 
 O Redpanda expõe a API Kafka em `localhost:19092` e um console web em
 **[http://localhost:8085](http://localhost:8085)**. O tópico `order-events` é criado

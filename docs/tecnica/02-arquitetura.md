@@ -520,6 +520,8 @@ flowchart TB
 
 Cada nó de aplicação é um repositório Git independente, materializado como submódulo do guarda-chuva. A topologia acima descreve processos, não repositórios: todos rodam na mesma máquina, a partir de checkouts distintos.
 
+O `docker-compose.yml` oferece dois modos. Sem profile, sobe apenas a infraestrutura e as aplicações rodam no host (topologia acima). Com `--profile apps`, os mesmos processos sobem em containers, na rede do Compose, e o gateway resolve os serviços por nome (`http://identity-service:8081`) em vez de `localhost`.
+
 ### 7.2 Portas e bancos
 
 | Componente | Porta | Banco / URL |
@@ -537,7 +539,8 @@ Cada nó de aplicação é um repositório Git independente, materializado como 
 
 ### 7.3 O que não existe na implantação
 
-- Dockerfiles para os serviços, frontend ou Android.
+- Dockerfile para os apps Android (o app é instalado no dispositivo, não roda em container).
+- Publicação de imagens em registry: o profile `apps` do Compose constrói localmente, com tag `:dev`.
 - Pipeline de CI/CD por repositório ou pipeline de integração no guarda-chuva.
 - Manifestos Kubernetes, Helm, Terraform ou GitOps.
 - Reverse proxy, TLS, CDN ou WAF.
@@ -655,6 +658,7 @@ Cada nó de aplicação é um repositório Git independente, materializado como 
 | [`0009`](09-decisoes/0009-agenda-de-producao-por-esforco.md) | Agenda de produção por esforço | Aceito |
 | [`0010`](09-decisoes/0010-cadastro-de-usuarios-por-perfil-e-tenant.md) | Cadastro de usuários por perfil e tenant | Aceito |
 | [`0011`](09-decisoes/0011-polyrepo-com-submodulos.md) | Polyrepo com submódulos Git | Aceito |
+| [`0012`](09-decisoes/0012-kit-desenvolvimento-em-containers.md) | Kit de desenvolvimento com Compose em dois modos | Aceito |
 
 ---
 

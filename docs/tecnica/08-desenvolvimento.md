@@ -586,24 +586,34 @@ Formato recomendado — [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.
 
 ## 12. Ambiente de desenvolvimento
 
-```powershell
-# 1. Infraestrutura
-docker compose up -d
+O guarda-chuva funciona como kit de onboarding: um clone recursivo, um `.env` e um comando.
 
-# 2. Backend (terminais separados)
+```powershell
+# 1. Código e variáveis
+git clone --recurse-submodules <url> delivery-marketplace
+cd delivery-marketplace
+Copy-Item .env.example .env
+
+# 2a. Infraestrutura em container + apps nativas (dia a dia)
+.\scripts\dev.ps1 infra
+
+# 2b. Ou tudo em containers (validação ponta a ponta)
+.\scripts\dev.ps1 apps
+
+# 3. Backend nativo (terminais separados), se escolheu 2a
 cd backend\identity-service
-$env:JWT_SECRET = "dev-only-secret-with-at-least-32-characters-2026"
-$env:APP_SEED_DEMO_DATA = "true"
 .\mvnw.cmd spring-boot:run
 
-# 3. Frontend
+# 4. Frontend nativo
 cd frontend
 npm run dev
 
-# 4. Android
+# 5. Android
 cd mobile\vendedor-android
 .\gradlew.bat installDebug
 ```
+
+Cada serviço e o frontend têm `Dockerfile` multi-stage próprio, versionado no respectivo repositório. O `docker-compose.yml` do guarda-chuva apenas referencia esses contextos.
 
 Detalhes, ordem de subida e troubleshooting em [`05-operacao.md`](05-operacao.md).
 
