@@ -594,11 +594,11 @@ git clone --recurse-submodules <url> delivery-marketplace
 cd delivery-marketplace
 Copy-Item .env.example .env
 
-# 2a. Infraestrutura em container + apps nativas (dia a dia)
-.\scripts\dev.ps1 infra
+# 2a. Tudo em containers (infra + serviços + frontend)
+.\scripts\dev.ps1 up
 
-# 2b. Ou tudo em containers (validação ponta a ponta)
-.\scripts\dev.ps1 apps
+# 2b. Ou só a infraestrutura, com as apps nativas (dia a dia)
+.\scripts\dev.ps1 infra
 
 # 3. Backend nativo (terminais separados), se escolheu 2a
 cd backend\identity-service

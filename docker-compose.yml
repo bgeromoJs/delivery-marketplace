@@ -1,13 +1,12 @@
 # Kit de desenvolvimento do Delivery Marketplace.
 #
-# Modo padrão (apenas infraestrutura):
-#   docker compose up -d
+# Um comando sobe tudo: PostgreSQL, Redis, Redpanda, os 5 serviços e o frontend.
+#   docker compose up -d --build
 #
-# Tudo em containers (infra + 5 serviços + frontend):
-#   docker compose --profile apps up -d --build
+# Só a infraestrutura (para rodar as aplicações nativamente, com hot reload):
+#   docker compose up -d postgres redis redpanda redpanda-console redpanda-init
 #
-# O profile "apps" está descrito no fim do arquivo. As variáveis vêm do .env
-# na raiz (copie .env.example).
+# As variáveis vêm do .env na raiz (copie .env.example).
 
 name: delivery-marketplace
 
@@ -98,15 +97,14 @@ services:
     restart: "no"
 
   # ==========================================================================
-  # Aplicações — profile "apps"
+  # Aplicações
   #
   # Usam os nomes de serviço do Compose (postgres, redpanda, tenant-service...)
-  # em vez de localhost. Para rodar as apps nativamente no host, não use este
-  # profile: elas continuam apontando para localhost por padrão.
+  # em vez de localhost. Para rodar as apps nativamente no host, suba apenas a
+  # infraestrutura (ver o cabeçalho deste arquivo).
   # ==========================================================================
 
   identity-service:
-    profiles: ["apps"]
     build:
       context: ./backend/identity-service
     image: delivery/identity-service:dev
@@ -131,7 +129,6 @@ services:
       start_period: 45s
 
   tenant-service:
-    profiles: ["apps"]
     build:
       context: ./backend/tenant-service
     image: delivery/tenant-service:dev
@@ -155,7 +152,6 @@ services:
       start_period: 45s
 
   catalog-service:
-    profiles: ["apps"]
     build:
       context: ./backend/catalog-service
     image: delivery/catalog-service:dev
@@ -182,7 +178,6 @@ services:
       start_period: 45s
 
   order-service:
-    profiles: ["apps"]
     build:
       context: ./backend/order-service
     image: delivery/order-service:dev
@@ -214,7 +209,6 @@ services:
       start_period: 45s
 
   api-gateway:
-    profiles: ["apps"]
     build:
       context: ./backend/api-gateway
     image: delivery/api-gateway:dev
@@ -245,7 +239,6 @@ services:
       start_period: 45s
 
   web:
-    profiles: ["apps"]
     build:
       context: ./frontend
       args:

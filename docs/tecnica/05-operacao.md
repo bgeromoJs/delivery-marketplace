@@ -219,18 +219,14 @@ cd ..\cliente-android
 
 ### 3.7 Ambiente completo em containers
 
-**Implementado.** O `docker-compose.yml` tem dois modos. O modo padrão sobe só a infraestrutura; o profile `apps` sobe também os cinco serviços e o frontend, construindo as imagens a partir dos submódulos.
+**Implementado.** O `docker-compose.yml` sobe **tudo** — PostgreSQL, Redis, Redpanda, Console, os cinco serviços e o frontend — com um comando. Não há profiles: as aplicações fazem parte do ambiente padrão.
 
 ```powershell
-# Infraestrutura apenas (apps rodando nativamente, como em 3.2–3.5)
-docker compose up -d
+# Constrói as imagens e sobe o ambiente completo
+docker compose up -d --build
 
-# Tudo em containers
-docker compose --profile apps up -d --build
-
-# Atalhos equivalentes
-.\scripts\dev.ps1 infra
-.\scripts\dev.ps1 apps
+# Atalho equivalente
+.\scripts\dev.ps1 up
 ```
 
 Antes da primeira subida, copie as variáveis:
@@ -239,7 +235,15 @@ Antes da primeira subida, copie as variáveis:
 Copy-Item .env.example .env
 ```
 
-No modo `apps`, os serviços falam entre si pelos nomes do Compose (`postgres`, `redpanda`, `tenant-service`) e não por `localhost`. Isso é feito por variáveis de ambiente, sem alterar o código:
+Se quiser rodar as aplicações nativamente (com hot reload) e usar o Docker apenas para infraestrutura, suba só esses serviços:
+
+```powershell
+docker compose up -d postgres redis redpanda redpanda-console redpanda-init
+# ou
+.\scripts\dev.ps1 infra
+```
+
+Em containers, os serviços falam entre si pelos nomes do Compose (`postgres`, `redpanda`, `tenant-service`) e não por `localhost`. Isso é feito por variáveis de ambiente, sem alterar o código:
 
 | Serviço | Variável | Valor no Compose |
 |---|---|---|
@@ -252,10 +256,11 @@ No modo `apps`, os serviços falam entre si pelos nomes do Compose (`postgres`, 
 
 Pontos de atenção:
 
-- **`NEXT_PUBLIC_API_URL` é embutido no bundle em tempo de build.** Mudar a URL exige `docker compose --profile apps build web`.
+- **`NEXT_PUBLIC_API_URL` é embutido no bundle em tempo de build.** Mudar a URL exige `docker compose build web`.
 - **`docker/init-db.sql` só roda com o volume vazio.** Para recriar os bancos, use `.\scripts\dev.ps1 reset` (equivale a `down -v` + `up -d`).
-- **O modo `apps` não tem hot reload.** Para desenvolvimento diário, prefira a infraestrutura em container e as aplicações nativas; use o profile `apps` para validar o fluxo completo e para onboarding.
+- **Não há hot reload em containers.** Alterar código Java exige `docker compose build <serviço>` e `docker compose up -d <serviço>`; para o dia a dia, use a infraestrutura em container e as aplicações nativas.
 - As portas `8081`–`8084` continuam publicadas para acesso direto ao Swagger de cada serviço. Fora do ambiente local, apenas `8080` deveria ser exposta.
+- A primeira subida compila seis imagens e pode levar de 10 a 20 minutos; as seguintes usam cache.
 
 ---
 

@@ -39,7 +39,8 @@ Sem esse registro, cada refatoração futura rediscute decisões já tomadas ou,
 | [0009](0009-agenda-de-producao-por-esforco.md) | Agenda de produção por esforço e agenda pública da cozinha | Aceito | Produto, dados e integração |
 | [0010](0010-cadastro-de-usuarios-por-perfil-e-tenant.md) | Cadastro de usuários por perfil e vínculo com loja | Aceito | Identidade e autorização |
 | [0011](0011-polyrepo-com-submodulos.md) | Polyrepo com submódulos Git | Aceito | Estrutural |
-| [0012](0012-kit-desenvolvimento-em-containers.md) | Kit de desenvolvimento com Compose em dois modos | Aceito | Operacional |
+| [0012](0012-kit-desenvolvimento-em-containers.md) | Kit de desenvolvimento com Compose em dois modos | Substituído por 0013 | Operacional |
+| [0013](0013-compose-unico-com-tudo.md) | Compose único com infraestrutura, backend e frontend | Aceito | Operacional |
 
 ### 2.1 Decisões que faltam registrar
 

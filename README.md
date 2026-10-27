@@ -137,33 +137,16 @@ em **Authorize**.
 
 ---
 
-## 🐳 Infraestrutura com Docker (PostgreSQL, Redis e Kafka)
+## 🐳 Ambiente completo com Docker (infra + backend + frontend)
 
-O kit tem dois modos. Copie as variáveis antes da primeira subida:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-### Modo padrão — só infraestrutura
-
-Sobe PostgreSQL 16 (com os bancos `identity_db`, `tenant_db`, `catalog_db`, `order_db`), Redis e Kafka (Redpanda). Use quando for rodar os serviços nativamente, com hot reload:
+Um comando sobe tudo: PostgreSQL 16 (com os bancos `identity_db`, `tenant_db`, `catalog_db`, `order_db`), Redis, Kafka (Redpanda), os 5 serviços e o frontend.
 
 ```powershell
-docker compose up -d
-# equivalente a
-.\scripts\dev.ps1 infra
+Copy-Item .env.example .env          # primeira vez
+docker compose up -d --build         # ou: .\scripts\dev.ps1 up
 ```
 
-### Modo completo — tudo em containers
-
-Sobe também os 5 serviços e o frontend, construindo as imagens a partir dos submódulos:
-
-```powershell
-docker compose --profile apps up -d --build
-# equivalente a
-.\scripts\dev.ps1 apps
-```
+A primeira subida compila 6 imagens e leva de 10 a 20 minutos; as seguintes usam cache.
 
 | Endereço | O que é |
 |---|---|
@@ -172,9 +155,25 @@ docker compose --profile apps up -d --build
 | http://localhost:8080/swagger-ui.html | Swagger agregado |
 | http://localhost:8085 | Console do Redpanda |
 
-Comandos úteis: `.\scripts\dev.ps1 reset` (recria os bancos), `.\scripts\dev.ps1 logs`, `.\scripts\dev.ps1 down`.
+### Só a infraestrutura (apps nativas, com hot reload)
 
-> O modo `apps` **não tem hot reload** e `NEXT_PUBLIC_API_URL` é embutido no bundle em tempo de build. Para o dia a dia, prefira o modo padrão com os serviços nativos.
+```powershell
+docker compose up -d postgres redis redpanda redpanda-console redpanda-init
+# ou: .\scripts\dev.ps1 infra
+```
+
+Depois suba os serviços com `.\mvnw.cmd spring-boot:run` e o frontend com `npm run dev`.
+
+### Comandos úteis
+
+```powershell
+.\scripts\dev.ps1 ps       # estado dos containers
+.\scripts\dev.ps1 logs     # logs de tudo
+.\scripts\dev.ps1 down     # para tudo, mantém os dados
+.\scripts\dev.ps1 reset    # apaga volumes e recria os bancos
+```
+
+> Em containers **não há hot reload**: alterar Java exige `docker compose build <serviço>`. E `NEXT_PUBLIC_API_URL` é embutido no bundle em tempo de build.
 
 O Redpanda expõe a API Kafka em `localhost:19092` e um console web em
 **[http://localhost:8085](http://localhost:8085)**. O tópico `order-events` é criado

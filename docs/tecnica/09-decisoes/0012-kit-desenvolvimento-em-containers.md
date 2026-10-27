@@ -2,12 +2,12 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Aceito |
+| Status | Substituído por [0013](0013-compose-unico-com-tudo.md) |
 | Data de registro | 2026-10-27 |
 | Decisores | Equipe de arquitetura |
 | Impacto | Operacional |
 | Substitui | — |
-| Substituído por | — |
+| Substituído por | 0013 |
 
 ## Contexto e problema
 

@@ -520,7 +520,7 @@ flowchart TB
 
 Cada nó de aplicação é um repositório Git independente, materializado como submódulo do guarda-chuva. A topologia acima descreve processos, não repositórios: todos rodam na mesma máquina, a partir de checkouts distintos.
 
-O `docker-compose.yml` oferece dois modos. Sem profile, sobe apenas a infraestrutura e as aplicações rodam no host (topologia acima). Com `--profile apps`, os mesmos processos sobem em containers, na rede do Compose, e o gateway resolve os serviços por nome (`http://identity-service:8081`) em vez de `localhost`.
+O `docker-compose.yml` sobe o ambiente completo por padrão: infraestrutura, os cinco serviços e o frontend. Nesse modo os processos rodam na rede do Compose e o gateway resolve os serviços por nome (`http://identity-service:8081`) em vez de `localhost`. Para rodar as aplicações no host, suba apenas os serviços de infraestrutura (`docker compose up -d postgres redis redpanda redpanda-console redpanda-init`) e mantenha a topologia acima.
 
 ### 7.2 Portas e bancos
 
@@ -658,7 +658,8 @@ O `docker-compose.yml` oferece dois modos. Sem profile, sobe apenas a infraestru
 | [`0009`](09-decisoes/0009-agenda-de-producao-por-esforco.md) | Agenda de produção por esforço | Aceito |
 | [`0010`](09-decisoes/0010-cadastro-de-usuarios-por-perfil-e-tenant.md) | Cadastro de usuários por perfil e tenant | Aceito |
 | [`0011`](09-decisoes/0011-polyrepo-com-submodulos.md) | Polyrepo com submódulos Git | Aceito |
-| [`0012`](09-decisoes/0012-kit-desenvolvimento-em-containers.md) | Kit de desenvolvimento com Compose em dois modos | Aceito |
+| [`0012`](09-decisoes/0012-kit-desenvolvimento-em-containers.md) | Kit de desenvolvimento com Compose em dois modos | Substituído por 0013 |
+| [`0013`](09-decisoes/0013-compose-unico-com-tudo.md) | Compose único com infraestrutura, backend e frontend | Aceito |
 
 ---
 
