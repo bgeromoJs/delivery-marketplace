@@ -1,0 +1,24 @@
+[submodule "backend/api-gateway"]
+	path = backend/api-gateway
+	url = ./backend/api-gateway
+[submodule "backend/identity-service"]
+	path = backend/identity-service
+	url = ./backend/identity-service
+[submodule "backend/tenant-service"]
+	path = backend/tenant-service
+	url = ./backend/tenant-service
+[submodule "backend/catalog-service"]
+	path = backend/catalog-service
+	url = ./backend/catalog-service
+[submodule "backend/order-service"]
+	path = backend/order-service
+	url = ./backend/order-service
+[submodule "frontend"]
+	path = frontend
+	url = ./frontend
+[submodule "mobile/cliente-android"]
+	path = mobile/cliente-android
+	url = ./mobile/cliente-android
+[submodule "mobile/vendedor-android"]
+	path = mobile/vendedor-android
+	url = ./mobile/vendedor-android
