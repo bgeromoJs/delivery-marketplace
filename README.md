@@ -22,8 +22,6 @@ delivery-marketplace/          # guarda-chuva: orquestração, docs e scripts
 │   └── package.json
 │
 ├── ☕ backend/                 # SUBMÓDULOS → um repo por serviço (Java 21 / Spring Boot 4.1.1)
-│   ├── pom.xml                 # Agregador local de conveniência (não publicado)
-│   ├── mvnw / mvnw.cmd         # Maven Wrapper do workspace
 │   ├── api-gateway/            # :8080 — Spring Cloud Gateway e CORS
 │   ├── identity-service/       # :8081 — Autenticação, usuários, papéis e JWT
 │   ├── tenant-service/         # :8082 — Lojas, slugs, temas dinâmicos e taxas
@@ -91,18 +89,14 @@ Abra **[http://localhost:3000](http://localhost:3000)** no navegador.
 
 ## ☕ Como Rodar o Backend (Microsserviços Java 21)
 
-Você pode compilar todos os serviços de uma vez a partir da pasta `backend`:
-
-```powershell
-cd backend
-.\mvnw.cmd test-compile -DskipTests
-```
-
-Para rodar qualquer microsserviço individualmente:
+Cada serviço é um repositório independente, com o próprio `pom.xml` e o próprio Maven Wrapper. Não existe mais um agregador no diretório `backend/`: o build é sempre por serviço.
 
 ```powershell
 # Exemplo: API Gateway (Porta 8080)
 cd backend\api-gateway
+.\mvnw.cmd test-compile -DskipTests
+.\mvnw.cmd spring-boot:run
+```
 .\mvnw.cmd spring-boot:run
 
 # Exemplo: Tenant Service (Porta 8082)

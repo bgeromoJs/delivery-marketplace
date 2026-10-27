@@ -7,7 +7,7 @@
 | Decisores | Equipe de arquitetura (registro retroativo) |
 | Impacto | Estrutural |
 | Substitui | — |
-| Substituído por | — |
+| Substituído por | Parcialmente [0011](0011-polyrepo-com-submodulos.md) (organização do repositório) e [0014](0014-remocao-do-agregador-maven.md) (agregador Maven) |
 
 ## Contexto e problema
 
@@ -81,6 +81,8 @@ Kubernetes + Istio + Eureka/Consul.
 **Escolhemos a opção 2.**
 
 O repositório implementa cinco módulos Maven independentes, agregados por [`backend/pom.xml`](../../../backend/pom.xml), com o gateway como única entrada prevista. A escolha privilegia isolamento de domínio com o menor custo operacional possível, adiando service mesh e discovery.
+
+> **Nota de atualização (2026-10-27):** o agregador `backend/pom.xml` foi removido no [ADR 0014](0014-remocao-do-agregador-maven.md). O parágrafo acima descreve o estado na data desta decisão.
 
 Configuração real do gateway em [`application.yml`](../../../backend/api-gateway/src/main/resources/application.yml):
 

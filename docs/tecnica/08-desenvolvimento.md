@@ -18,8 +18,6 @@
 delivery-marketplace/              # repo guarda-chuva (orquestração)
 ├── .gitmodules                    # 8 submódulos: 5 serviços, web e 2 apps Android
 ├── backend/
-│   ├── pom.xml                    # agregador local de conveniência (não publicado)
-│   ├── mvnw / mvnw.cmd
 │   ├── api-gateway/               # submódulo → repo próprio — :8080 — Spring Cloud Gateway MVC
 │   ├── identity-service/          # submódulo → repo próprio — :8081 — auth, usuários, JWT, auditoria
 │   ├── tenant-service/            # submódulo → repo próprio — :8082 — lojas, tema, pagamentos, entregadores
@@ -43,7 +41,7 @@ delivery-marketplace/              # repo guarda-chuva (orquestração)
 │   ├── arquitetura.md             # visão-alvo (não as-is)
 │   ├── padroes-documentacao.md    # padrões editoriais
 │   └── tecnica/                   # esta documentação
-├── docker-compose.yml             # PostgreSQL 16, Redis 7, Redpanda, Console e init do tópico
+├── docker-compose.yml             # infra + 5 serviços + frontend (um comando sobe tudo)
 ├── AGENTS.md                      # instruções para agentes de código
 └── README.md                      # porta de entrada (parcialmente histórico)
 ```
@@ -51,6 +49,8 @@ delivery-marketplace/              # repo guarda-chuva (orquestração)
 ### 1.1 Repositórios e submódulos
 
 **Implementado.** Cada projeto tem histórico, branches, tags e CI próprios. O guarda-chuva não versiona código de aplicação: registra apenas o SHA de cada submódulo, o que torna o ambiente reproduzível.
+
+O diretório `backend/` contém somente os cinco submódulos. Não há `pom.xml` agregador, `mvnw`/`mvnw.cmd` nem `.mvn/` na sua raiz: cada serviço tem o próprio wrapper e compila de forma independente ([ADR 0014](09-decisoes/0014-remocao-do-agregador-maven.md)).
 
 | Caminho no guarda-chuva | Repositório | Build |
 |---|---|---|

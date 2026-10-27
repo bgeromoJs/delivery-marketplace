@@ -2,12 +2,12 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Aceito |
+| Status | Aceito (parcialmente substituído) |
 | Data de registro | 2026-10-27 |
 | Decisores | Equipe de arquitetura |
 | Impacto | Estrutural |
 | Substitui | Parcialmente [0001](0001-microsservicos-e-api-gateway.md) (organização do repositório) |
-| Substituído por | — |
+| Substituído por | Parcialmente [0014](0014-remocao-do-agregador-maven.md) (agregador Maven em `backend/`) |
 
 ## Contexto e problema
 
@@ -78,7 +78,7 @@ Os repositórios são independentes e um script os clona a partir de uma lista.
 
 **Escolhemos a opção 2.**
 
-O repositório `delivery-marketplace` passa a ser um guarda-chuva de orquestração com oito submódulos: `backend/api-gateway`, `backend/identity-service`, `backend/tenant-service`, `backend/catalog-service`, `backend/order-service`, `frontend`, `mobile/cliente-android` e `mobile/vendedor-android`. `backend/pom.xml` permanece como agregador local de conveniência para compilar os cinco serviços de uma vez, mas não é publicado nem faz parte de nenhum repositório de serviço.
+O repositório `delivery-marketplace` passa a ser um guarda-chuva de orquestração com oito submódulos: `backend/api-gateway`, `backend/identity-service`, `backend/tenant-service`, `backend/catalog-service`, `backend/order-service`, `frontend`, `mobile/cliente-android` e `mobile/vendedor-android`. O `pom.xml` agregador em `backend/` foi removido depois, no [ADR 0014](0014-remocao-do-agregador-maven.md); na data desta decisão ele ainda existia como conveniência local.
 
 Enquanto não há host definido (F3), o `.gitmodules` aponta para caminhos locais relativos. `scripts/set-submodule-urls.ps1` reescreve as URLs para o host real quando ele existir.
 

@@ -83,12 +83,9 @@ O `contextLoads()` do gateway não usa banco, mas valida o segredo JWT: com `JWT
 ### 1.4 Comandos reais
 
 ```powershell
-# Backend completo (exige PostgreSQL no ar)
-cd backend
+# Backend — sempre por serviço, a partir do diretório dele (exige PostgreSQL no ar)
+cd backend\identity-service
 .\mvnw.cmd test
-
-# Um módulo
-.\mvnw.cmd -pl identity-service test
 
 # Apenas compilação
 .\mvnw.cmd test-compile -DskipTests
@@ -105,6 +102,8 @@ cd mobile\vendedor-android
 cd ..\cliente-android
 .\gradlew.bat assembleDebug
 ```
+
+> Não existe mais agregador em `backend/`: cada serviço tem o próprio `pom.xml` e o próprio Maven Wrapper, então testes e builds rodam por repositório.
 
 ---
 

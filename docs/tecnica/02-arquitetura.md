@@ -56,7 +56,7 @@
 ### 2.2 Organizacionais
 
 - Polyrepo: cada um dos cinco serviços, o frontend web e cada app Android têm repositório Git próprio. O repositório `delivery-marketplace` é o guarda-chuva de orquestração e amarra as versões por submódulos Git (ver [ADR 0011](09-decisoes/0011-polyrepo-com-submodulos.md)).
-- O guarda-chuva versiona apenas orquestração: `docker-compose.yml`, `docker/`, `docs/`, `scripts/` e `.gitmodules`. `backend/pom.xml` permanece como agregador local de conveniência para compilar os cinco serviços de uma vez; não é publicado.
+- O guarda-chuva versiona apenas orquestração: `docker-compose.yml`, `docker/`, `docs/`, `scripts/` e `.gitmodules`. O diretório `backend/` contém exclusivamente os cinco submódulos — não há mais `pom.xml` agregador, `mvnw` nem `.mvn/` na raiz de `backend/` (ver [ADR 0014](09-decisoes/0014-remocao-do-agregador-maven.md)).
 - Ambiente local é o alvo primário desta documentação.
 - Não há pipeline de CI/CD, ambientes separados ou infraestrutura como código.
 - O time pode alterar serviços independentemente, mas o contrato HTTP não é versionado.
@@ -657,9 +657,10 @@ O `docker-compose.yml` sobe o ambiente completo por padrão: infraestrutura, os 
 | [`0008`](09-decisoes/0008-eventos-de-pedido-com-sse-e-kafka.md) | Eventos de pedido por SSE e Kafka | Aceito |
 | [`0009`](09-decisoes/0009-agenda-de-producao-por-esforco.md) | Agenda de produção por esforço | Aceito |
 | [`0010`](09-decisoes/0010-cadastro-de-usuarios-por-perfil-e-tenant.md) | Cadastro de usuários por perfil e tenant | Aceito |
-| [`0011`](09-decisoes/0011-polyrepo-com-submodulos.md) | Polyrepo com submódulos Git | Aceito |
+| [`0011`](09-decisoes/0011-polyrepo-com-submodulos.md) | Polyrepo com submódulos Git | Aceito (parcialmente substituído por 0014) |
 | [`0012`](09-decisoes/0012-kit-desenvolvimento-em-containers.md) | Kit de desenvolvimento com Compose em dois modos | Substituído por 0013 |
 | [`0013`](09-decisoes/0013-compose-unico-com-tudo.md) | Compose único com infraestrutura, backend e frontend | Aceito |
+| [`0014`](09-decisoes/0014-remocao-do-agregador-maven.md) | Remoção do agregador Maven em `backend/` | Aceito |
 
 ---
 
