@@ -1,17 +1,17 @@
 # 🚀 Delivery Marketplace Multi-tenant
 
-Plataforma completa de delivery com **Backend em Microsserviços (Java 21 / Spring Boot 3)** e **Frontend Único (Next.js 16 / TypeScript / Tailwind CSS)**, cobrindo os 4 perfis do ecossistema: **Cliente**, **Vendedor**, **Entregador** e **Administrador**.
+Plataforma completa de delivery com **Backend em Microsserviços (Java 21 / Spring Boot 4.1.1)** e **Frontend Único (Next.js 16 / TypeScript / Tailwind CSS)**, cobrindo os 4 perfis do ecossistema: **Cliente**, **Vendedor**, **Entregador** e **Administrador**.
 
 ---
 
 ## 📁 Estrutura de Diretórios da Raiz
 
-O projeto é organizado com backend e frontend claramente separados no mesmo repositório:
+O projeto é um **polyrepo**: cada serviço, o frontend e cada app Android têm repositório Git próprio, e este repositório é o **guarda-chuva** que amarra as versões por submódulos.
 
 ```text
-delivery-marketplace/
+delivery-marketplace/          # guarda-chuva: orquestração, docs e scripts
 │
-├── 🌐 frontend/                # PROJETO ÚNICO FRONTEND (Next.js 16, TypeScript, Tailwind CSS)
+├── 🌐 frontend/                # SUBMÓDULO → repo próprio (Next.js 16, TypeScript, Tailwind CSS)
 │   ├── src/app/
 │   │   ├── page.tsx            # Hub Geral com atalhos para todos os perfis
 │   │   ├── loja/[slug]/        # App do Cliente (White-label dinâmico, carrinho, checkout Pix/Cartão, rastreio)
@@ -19,28 +19,49 @@ delivery-marketplace/
 │   │   ├── entregador/         # App do Entregador (Online/Offline, ofertas, rota de coleta e entrega)
 │   │   └── admin/              # Painel Master Admin (GMV, comissões de 12%, gestão de lojas)
 │   ├── src/lib/api.ts          # Cliente de API integrado ao Gateway com fallback
-│   ├── package.json
-│   └── tsconfig.json
+│   └── package.json
 │
-├── ☕ backend/                 # PROJETO BACKEND EM MICROSSERVIÇOS (Java 21 / Spring Boot 3)
-│   ├── pom.xml                 # Aggregator Maven raiz (compila todos os microsserviços juntos)
-│   ├── mvnw / mvnw.cmd         # Maven Wrapper raiz
-│   ├── api-gateway/            # Porta 8080 - Spring Cloud Gateway e CORS
-│   ├── identity-service/       # Porta 8081 - Autenticação, usuários, papéis e JWT
-│   ├── tenant-service/         # Porta 8082 - Lojas, slugs, temas dinâmicos e taxas
-│   ├── catalog-service/        # Porta 8083 - Categorias, pratos, adicionais e estoque
-│   └── order-service/          # Porta 8084 - Máquina de estados e Saga do pedido
+├── ☕ backend/                 # SUBMÓDULOS → um repo por serviço (Java 21 / Spring Boot 4.1.1)
+│   ├── pom.xml                 # Agregador local de conveniência (não publicado)
+│   ├── mvnw / mvnw.cmd         # Maven Wrapper do workspace
+│   ├── api-gateway/            # :8080 — Spring Cloud Gateway e CORS
+│   ├── identity-service/       # :8081 — Autenticação, usuários, papéis e JWT
+│   ├── tenant-service/         # :8082 — Lojas, slugs, temas dinâmicos e taxas
+│   ├── catalog-service/        # :8083 — Categorias, pratos, adicionais e estoque
+│   └── order-service/          # :8084 — Máquina de estados e Saga do pedido
 │
-├── 🐳 docker/                  # Recursos e scripts do Docker
+├── 📱 mobile/                  # SUBMÓDULOS → um repo por app (Kotlin / Compose)
+│   ├── cliente-android/        # App do cliente
+│   └── vendedor-android/       # App do vendedor
+│
+├── 🐳 docker/
 │   └── init-db.sql             # Criação dos bancos isolados por serviço (database-per-service)
 │
-├── 📄 docs/                    # Documentação do Projeto
-│   └── arquitetura.md          # Especificação técnica completa da arquitetura
+├── 🛠️ scripts/
+│   ├── bootstrap.ps1           # Baixa os submódulos no SHA registrado
+│   └── set-submodule-urls.ps1  # Aponta os submódulos para o host real
 │
+├── 📄 docs/                    # Documentação do projeto (hub em docs/tecnica/README.md)
 ├── 🐳 docker-compose.yml       # PostgreSQL 16, Redis 7 e Kafka (Redpanda)
 ├── 📝 README.md                # Este guia
-└── ⚙️ .gitignore
+└── ⚙️ .gitmodules              # Os 8 submódulos e suas URLs
 ```
+
+---
+
+## 📥 Como obter o código
+
+O clone precisa dos submódulos; sem eles, `backend/`, `frontend/` e `mobile/` ficam vazios.
+
+```powershell
+git clone --recurse-submodules <url-do-guarda-chuva> delivery-marketplace
+cd delivery-marketplace
+
+# Em um clone já existente:
+.\scripts\bootstrap.ps1
+```
+
+Ao alterar um projeto, commite e faça push **dentro** do repositório dele antes de commitar o ponteiro no guarda-chuva. Detalhes em [`docs/tecnica/08-desenvolvimento.md`](docs/tecnica/08-desenvolvimento.md).
 
 ---
 
@@ -95,6 +116,25 @@ cd backend\order-service
 
 > **Banco de Dados em Desenvolvimento:** Todos os microsserviços possuem o banco em memória H2 configurado por padrão com seeders de dados automáticos, funcionando imediatamente sem precisar de configurações prévias.
 
+### 📘 Documentação das APIs (Swagger / OpenAPI)
+
+Cada serviço publica a especificação OpenAPI 3 e uma UI do Swagger:
+
+| Serviço | Swagger UI | OpenAPI JSON |
+|---|---|---|
+| **Agregado (Gateway)** | http://localhost:8080/swagger-ui.html | — |
+| identity-service | http://localhost:8081/swagger-ui.html | http://localhost:8081/v3/api-docs |
+| tenant-service | http://localhost:8082/swagger-ui.html | http://localhost:8082/v3/api-docs |
+| catalog-service | http://localhost:8083/swagger-ui.html | http://localhost:8083/v3/api-docs |
+| order-service | http://localhost:8084/swagger-ui.html | http://localhost:8084/v3/api-docs |
+
+O Swagger do **gateway** agrega os quatro serviços: use o seletor *Select a definition*
+no topo da página. Ele busca `/v3/api-docs/{identity|tenant|catalog|order}`, que o
+gateway encaminha para o serviço correspondente.
+
+Para testar endpoints protegidos, faça `POST /api/auth/login`, copie o token e clique
+em **Authorize**.
+
 ---
 
 ## 🐳 Infraestrutura com Docker (PostgreSQL, Redis e Kafka)
@@ -104,3 +144,41 @@ Para subir o banco PostgreSQL 16 (com bancos separados `identity_db`, `tenant_db
 ```powershell
 docker compose up -d
 ```
+
+O Redpanda expõe a API Kafka em `localhost:19092` e um console web em
+**[http://localhost:8085](http://localhost:8085)**. O tópico `order-events` é criado
+automaticamente na subida.
+
+### ⚡ Pedidos em tempo real
+
+O order-service publica `ORDER_CREATED`, `ORDER_UPDATED` e `ORDER_CANCELLED` no tópico
+`order-events` e entrega os mesmos eventos ao app vendedor por SSE
+(`GET /api/store/me/orders/stream`). Assim o pedido novo aparece sem atualizar a tela.
+
+Detalhes, contrato do evento, testes com `curl` e o próximo passo (push FCM com o app
+fechado) estão em **[`docs/tempo-real-pedidos.md`](docs/tempo-real-pedidos.md)**.
+
+---
+
+## 📚 Documentação técnica
+
+A documentação técnica descreve **o que o código faz hoje** (Spring Boot 4.1.1, PostgreSQL 16, Next.js 16), com status explícito para cada capacidade: Implementado, Parcial, Planejado, Divergente ou Legado.
+
+| Documento | Conteúdo |
+|---|---|
+| **[`docs/tecnica/README.md`](docs/tecnica/README.md)** | Hub: estado do sistema, mapa dos documentos e divergências conhecidas |
+| [`docs/tecnica/01-visao-geral.md`](docs/tecnica/01-visao-geral.md) | Problema, personas, escopo real e glossário |
+| [`docs/tecnica/02-arquitetura.md`](docs/tecnica/02-arquitetura.md) | Arquitetura as-is (arc42 + C4), fluxos, implantação e riscos |
+| [`docs/tecnica/03-api.md`](docs/tecnica/03-api.md) | Referência HTTP, autenticação, erros e lacunas de contrato |
+| [`docs/tecnica/04-dados.md`](docs/tecnica/04-dados.md) | Schemas, migrações Liquibase, seeds e multi-tenancy |
+| [`docs/tecnica/05-operacao.md`](docs/tecnica/05-operacao.md) | Subida, variáveis, health checks, troubleshooting e runbooks |
+| [`docs/tecnica/06-seguranca.md`](docs/tecnica/06-seguranca.md) | JWT, autorização, CORS, LGPD, STRIDE e hardening |
+| [`docs/tecnica/07-qualidade-e-testes.md`](docs/tecnica/07-qualidade-e-testes.md) | Testes existentes, estratégia, cenários e portões de CI |
+| [`docs/tecnica/08-desenvolvimento.md`](docs/tecnica/08-desenvolvimento.md) | Estrutura, convenções, PRs, commits e processo de ADR |
+| [`docs/tecnica/09-decisoes/README.md`](docs/tecnica/09-decisoes/README.md) | Índice de decisões arquiteturais (ADRs) |
+| [`docs/padroes-documentacao.md`](docs/padroes-documentacao.md) | Padrões, normas e regras editoriais adotados |
+
+> `README.md` e `docs/arquitetura.md` contêm afirmações históricas ou de visão-alvo. Em caso de conflito, prevalecem a documentação técnica e o código.
+
+Ao alterar o projeto, atualize o documento afetado no mesmo commit. O processo está em [`.agents/skills/atualizar-documentacao-tecnica/SKILL.md`](.agents/skills/atualizar-documentacao-tecnica/SKILL.md).
+
