@@ -1,24 +1,24 @@
 [submodule "backend/api-gateway"]
 	path = backend/api-gateway
-	url = ./backend/api-gateway
+	url = git@github.com:bgeromoJs/delivery-marketplace-api-gateway.git
 [submodule "backend/identity-service"]
 	path = backend/identity-service
-	url = ./backend/identity-service
+	url = git@github.com:bgeromoJs/delivery-marketplace-identity-service.git
 [submodule "backend/tenant-service"]
 	path = backend/tenant-service
-	url = ./backend/tenant-service
+	url = git@github.com:bgeromoJs/delivery-marketplace-tenant-service.git
 [submodule "backend/catalog-service"]
 	path = backend/catalog-service
-	url = ./backend/catalog-service
+	url = git@github.com:bgeromoJs/delivery-marketplace-catalog-service.git
 [submodule "backend/order-service"]
 	path = backend/order-service
-	url = ./backend/order-service
+	url = git@github.com:bgeromoJs/delivery-marketplace-order-service.git
 [submodule "frontend"]
 	path = frontend
-	url = ./frontend
+	url = git@github.com:bgeromoJs/delivery-marketplace-admin-panel-web.git
 [submodule "mobile/cliente-android"]
 	path = mobile/cliente-android
-	url = ./mobile/cliente-android
+	url = git@github.com:bgeromoJs/delivery-marketplace-tenant-app.git
 [submodule "mobile/vendedor-android"]
 	path = mobile/vendedor-android
-	url = ./mobile/vendedor-android
+	url = git@github.com:bgeromoJs/delivery-marketplace-customer-app.git

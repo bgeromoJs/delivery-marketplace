@@ -4,16 +4,16 @@
     Aponta os submódulos para as URLs reais de hospedagem.
 
 .DESCRIPTION
-    Enquanto não há hospedagem definida, o .gitmodules usa caminhos locais
-    relativos, o que só funciona na máquina que criou os repositórios.
-    Este script reescreve as URLs para o host escolhido e sincroniza a
-    configuração local.
+    Reescreve as URLs do .gitmodules para o host escolhido e sincroniza a
+    configuração local. Serve para migrar de caminhos locais para o remoto e
+    para trocar de host ou de organização depois.
 
 .PARAMETER BaseUrl
-    Prefixo das URLs. Ex.: https://github.com/minha-org ou git@github.com:minha-org
+    Prefixo das URLs, até a organização. Ex.: https://github.com/minha-org
+    ou git@github.com:minha-org
 
 .EXAMPLE
-    .\scripts\set-submodule-urls.ps1 -BaseUrl https://github.com/delivery-marketplace
+    .\scripts\set-submodule-urls.ps1 -BaseUrl git@github.com:bgeromoJs
 #>
 [CmdletBinding()]
 param(
@@ -27,25 +27,23 @@ $base = $BaseUrl.TrimEnd('/')
 
 # Caminho no guarda-chuva -> nome do repositório remoto.
 $repos = [ordered]@{
-    'backend/api-gateway'      = 'api-gateway'
-    'backend/identity-service' = 'identity-service'
-    'backend/tenant-service'   = 'tenant-service'
-    'backend/catalog-service'  = 'catalog-service'
-    'backend/order-service'    = 'order-service'
-    'frontend'                 = 'delivery-web'
-    'mobile/cliente-android'   = 'cliente-android'
-    'mobile/vendedor-android'  = 'vendedor-android'
+    'backend/api-gateway'      = 'delivery-marketplace-api-gateway'
+    'backend/identity-service' = 'delivery-marketplace-identity-service'
+    'backend/tenant-service'   = 'delivery-marketplace-tenant-service'
+    'backend/catalog-service'  = 'delivery-marketplace-catalog-service'
+    'backend/order-service'    = 'delivery-marketplace-order-service'
+    'frontend'                 = 'delivery-marketplace-admin-panel-web'
+    'mobile/cliente-android'   = 'delivery-marketplace-tenant-app'
+    'mobile/vendedor-android'  = 'delivery-marketplace-customer-app'
 }
 
 Push-Location $root
 try {
     foreach ($path in $repos.Keys) {
         $name = $repos[$path]
-        $url = if ($base -like 'git@*' -or $base -like 'ssh://*') {
-            "$base/$name.git"
-        } else {
-            "$base/$name.git"
-        }
+        # Vale para HTTPS (https://github.com/org) e SSH (git@github.com:org):
+        # o separador do SSH fica antes da organização, não antes do repositório.
+        $url = "$base/$name.git"
 
         git submodule set-url $path $url
         if ($LASTEXITCODE -ne 0) { throw "Falha ao ajustar a URL de '$path'." }

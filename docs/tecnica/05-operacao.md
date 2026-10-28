@@ -39,6 +39,8 @@ cd delivery-marketplace
 
 `scripts\bootstrap.ps1` executa `git submodule update --init --recursive` e lista os SHAs registrados. Se o workspace foi copiado de outra máquina, rode `scripts\set-submodule-urls.ps1 -BaseUrl <url-base>` para apontar os submódulos ao host real.
 
+> No Windows, a execution policy padrão pode bloquear os scripts (`... a execução de scripts foi desabilitada neste sistema`). Rode com `powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 up` ou libere uma vez com `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
 > **Ao alterar um projeto**, o commit é feito dentro do repositório dele. O guarda-chuva só registra o novo SHA. Commit e push no repositório filho **antes** de commitar o ponteiro no guarda-chuva; caso contrário o clone de outra pessoa aponta para um commit inexistente.
 
 ---
@@ -513,6 +515,9 @@ Os seeders condicionais não rodam. `StoreDataSeeder` e `OrderDataSeeder` contin
 | Checkout retorna `409` | Sem capacidade comum na janela/dia pedidos | Resposta `SchedulingService` | Escolher outra janela, reduzir itens ou aumentar `SCHEDULING_MAX_DAYS_AHEAD` |
 | Agenda sempre no fallback | Catálogo fora do ar ou prato sem `salesDaysJson`/`salesWindowsJson` | Log `Não foi possível consultar o catálogo` | Subir `catalog-service`, conferir `CATALOG_SERVICE_URL` e configurar os pratos |
 | Esforço inesperado na agenda | `effortMinutes` do prato desatualizado; catálogo prevalece sobre o request | Consultar `GET /api/catalog/dishes/{id}` | Ajustar o esforço no cardápio do vendedor |
+| `... não pode ser carregado porque a execução de scripts foi desabilitada` | Execution policy do Windows bloqueia `.ps1` | `Get-ExecutionPolicy` | `powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 up` ou `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
+| Submódulo vazio após clonar | Clone sem `--recurse-submodules` | `git submodule status` (prefixo `-`) | `git submodule update --init --recursive` |
+| `not our ref` ao inicializar submódulo | O guarda-chuva aponta para um commit que não existe no remoto do projeto | `git ls-remote <url> refs/heads/main` | Fazer push do projeto antes de commitar o ponteiro no guarda-chuva |
 
 ### 7.1 Comandos úteis
 
