@@ -262,6 +262,52 @@ Pontos de atenção:
 - As portas `8081`–`8084` continuam publicadas para acesso direto ao Swagger de cada serviço. Fora do ambiente local, apenas `8080` deveria ser exposta.
 - A primeira subida compila seis imagens e pode levar de 10 a 20 minutos; as seguintes usam cache.
 
+#### Limites de memória
+
+**Implementado.** Cada container de aplicação tem teto e reserva de memória declarados no `docker-compose.yml`. O teto vale para o container inteiro; o heap é uma fração dele, definida por `JAVA_MAX_RAM_PERCENTAGE` no `Dockerfile`.
+
+| Serviço | `mem_limit` | `mem_reservation` | Heap máximo |
+|---|---|---|---|
+| identity-service | 512 MB | 256 MB | ~206 MB (40%) |
+| tenant-service | 512 MB | 256 MB | ~206 MB (40%) |
+| catalog-service | 512 MB | 256 MB | ~206 MB (40%) |
+| order-service | 512 MB | 256 MB | ~206 MB (40%) |
+| api-gateway | 512 MB | 256 MB | ~206 MB (40%) |
+| web | 448 MB | 128 MB | ~384 MB (192 MB de old space + 192 MB de overhead do V8) |
+
+Somando, o teto das seis aplicações é **~3,0 GB**; a infraestrutura (`postgres`, `redis`, `redpanda`, `redpanda-console`) não tem `mem_limit` e é limitada apenas pelo que o Docker Desktop oferece.
+
+Como o limite é aplicado:
+
+```yaml
+# docker-compose.yml
+mem_limit: 512m        # teto: o container é morto se passar disso
+mem_reservation: 256m  # reserva: usada pelo Docker para decidir o que descartar sob pressão
+```
+
+```dockerfile
+# Dockerfile — o heap acompanha o teto do container (JVM ciente de cgroups)
+ENV JAVA_MAX_RAM_PERCENTAGE=40
+```
+
+Os 60% restantes do container cobrem metaspace, code cache, threads, buffers nativos e overhead do SO. Como o JVM lê o `mem_limit` pelo cgroup, mudar o teto no Compose reajusta o heap automaticamente — não é preciso editar o `Dockerfile`.
+
+Ajustes comuns:
+
+```powershell
+# Dar mais heap a um serviço específico sem mudar o teto
+# (docker-compose.yml, dentro do serviço)
+#   environment:
+#     JAVA_MAX_RAM_PERCENTAGE: 60
+
+# Ver o consumo real de cada container
+docker stats --no-stream
+```
+
+Quando o heap estoura, o processo sai com `ExitOnOutOfMemoryError` e o `restart: unless-stopped` o reinicia; o sintoma no log é `OutOfMemoryError` seguido de reinício. Se o container inteiro passar do teto, o Docker o mata com código **137** (`docker compose ps` mostra `Exited (137)`).
+
+> Os valores são conservadores para desenvolvimento e **não foram medidos** com carga real. Para um ambiente com tráfego, meça com `docker stats` antes de fixar limites.
+
 ---
 
 ## 4. Variáveis de ambiente
@@ -288,6 +334,7 @@ Pontos de atenção:
 | `KAFKA_ENABLED` | order | Não | `true` | `false` desliga a publicação; SSE continua. |
 | `KAFKA_ORDER_TOPIC` | order | Não | `order-events` | Tópico dos eventos de pedido. |
 | `SECURITY_CORS_ALLOWEDORIGINPATTERNS` | gateway | Não | padrões locais | Lista separada por vírgula. |
+| `JAVA_MAX_RAM_PERCENTAGE` | todos (imagem Docker) | Não | `40` | Percentual do `mem_limit` usado como heap. Definido no `Dockerfile`; sobrescreva no Compose se precisar de mais heap. |
 
 > O nome canônico de `security.cors.allowed-origin-patterns` em variável de ambiente é `SECURITY_CORS_ALLOWEDORIGINPATTERNS` (relaxed binding). Em caso de dúvida, use `--security.cors.allowed-origin-patterns=...` como argumento.
 
@@ -296,6 +343,7 @@ Pontos de atenção:
 | Variável | Onde | Efeito |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | frontend | URL do gateway; padrão `http://localhost:8080`. |
+| `NODE_OPTIONS` | frontend (imagem Docker) | Padrão `--max-old-space-size=192`. Define o heap do Node em runtime. |
 | `API_BASE_URL` | Android (Gradle property) | URL base com `/api/`; padrão `http://10.0.2.2:8080/api/`. |
 
 ### 4.3 Exemplo de `.env` local

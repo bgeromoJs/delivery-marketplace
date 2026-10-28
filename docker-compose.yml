@@ -110,6 +110,9 @@ services:
     image: delivery/identity-service:dev
     container_name: delivery-identity
     restart: unless-stopped
+    # Teto de memória do container. O heap da JVM é 40% disso (JAVA_MAX_RAM_PERCENTAGE).
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/identity_db
       SPRING_DATASOURCE_USERNAME: postgres
@@ -134,6 +137,9 @@ services:
     image: delivery/tenant-service:dev
     container_name: delivery-tenant
     restart: unless-stopped
+    # Teto de memória do container. O heap da JVM é 40% disso (JAVA_MAX_RAM_PERCENTAGE).
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tenant_db
       SPRING_DATASOURCE_USERNAME: postgres
@@ -157,6 +163,9 @@ services:
     image: delivery/catalog-service:dev
     container_name: delivery-catalog
     restart: unless-stopped
+    # Teto de memória do container. O heap da JVM é 40% disso (JAVA_MAX_RAM_PERCENTAGE).
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/catalog_db
       SPRING_DATASOURCE_USERNAME: postgres
@@ -183,6 +192,9 @@ services:
     image: delivery/order-service:dev
     container_name: delivery-order
     restart: unless-stopped
+    # Teto de memória do container. O heap da JVM é 40% disso (JAVA_MAX_RAM_PERCENTAGE).
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/order_db
       SPRING_DATASOURCE_USERNAME: postgres
@@ -214,6 +226,9 @@ services:
     image: delivery/api-gateway:dev
     container_name: delivery-gateway
     restart: unless-stopped
+    # Teto de memória do container. O heap da JVM é 40% disso (JAVA_MAX_RAM_PERCENTAGE).
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       JWT_SECRET: ${JWT_SECRET:-deliveryhub-local-only-secret-key-change-before-deploy-2026}
       IDENTITY_SERVICE_URL: http://identity-service:8081
@@ -247,6 +262,10 @@ services:
     image: delivery/web:dev
     container_name: delivery-web
     restart: unless-stopped
+    # Front é leve: heap do Node limitado a 192 MB no Dockerfile (NODE_OPTIONS).
+    # O V8 reserva +192 MB além disso, então o teto do heap fica em ~384 MB.
+    mem_limit: 448m
+    mem_reservation: 128m
     ports:
       - "3000:3000"
     depends_on:

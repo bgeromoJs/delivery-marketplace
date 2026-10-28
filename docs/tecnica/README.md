@@ -49,6 +49,7 @@
 | Testes automatizados | **Parcial** | Cinco testes de contexto no backend; nenhum teste de comportamento, frontend ou Android. |
 | Repositórios | **Implementado** | Polyrepo com 8 submódulos (5 serviços, web e 2 apps) amarrados pelo guarda-chuva — [ADR 0011](09-decisoes/0011-polyrepo-com-submodulos.md). |
 | Kit de desenvolvimento | **Implementado** | Compose único sobe infraestrutura, 5 serviços e frontend; `Dockerfile` por projeto e `scripts/dev.ps1` — [ADR 0013](09-decisoes/0013-compose-unico-com-tudo.md). |
+| Limites de recursos | **Implementado** | 512 MB por serviço backend e 448 MB no frontend, com heap proporcional ao teto — [ADR 0015](09-decisoes/0015-limites-de-memoria-por-container.md). |
 | CI/CD | **Planejado** | Não há pipeline versionado no repositório. |
 
 ---

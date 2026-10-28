@@ -490,23 +490,25 @@ A agenda pública filtra os pedidos do dia, exclui `CANCELLED` e devolve `Agenda
 ```mermaid
 flowchart TB
     subgraph HOST["Máquina de desenvolvimento"]
-        WEB["Next.js dev<br/>:3000"]
-        GW["API Gateway<br/>:8080"]
-        ID["identity<br/>:8081"]
-        TEN["tenant<br/>:8082"]
-        CAT["catalog<br/>:8083"]
-        ORD["order<br/>:8084"]
+        BROWSER["Navegador<br/>localhost:3000"]
         AND["Emulador Android<br/>10.0.2.2:8080"]
     end
 
     subgraph DOCKER["Docker Compose"]
+        WEB["web<br/>:3000 · 448 MB"]
+        GW["api-gateway<br/>:8080 · 512 MB"]
+        ID["identity<br/>:8081 · 512 MB"]
+        TEN["tenant<br/>:8082 · 512 MB"]
+        CAT["catalog<br/>:8083 · 512 MB"]
+        ORD["order<br/>:8084 · 512 MB"]
         PG[("PostgreSQL 16<br/>:5432")]
         RD[("Redis 7<br/>:6379")]
         RP[("Redpanda<br/>:19092")]
     end
 
-    WEB --> GW
+    BROWSER --> WEB
     AND --> GW
+    WEB --> GW
     GW --> ID
     GW --> TEN
     GW --> CAT
@@ -520,7 +522,9 @@ flowchart TB
 
 Cada nó de aplicação é um repositório Git independente, materializado como submódulo do guarda-chuva. A topologia acima descreve processos, não repositórios: todos rodam na mesma máquina, a partir de checkouts distintos.
 
-O `docker-compose.yml` sobe o ambiente completo por padrão: infraestrutura, os cinco serviços e o frontend. Nesse modo os processos rodam na rede do Compose e o gateway resolve os serviços por nome (`http://identity-service:8081`) em vez de `localhost`. Para rodar as aplicações no host, suba apenas os serviços de infraestrutura (`docker compose up -d postgres redis redpanda redpanda-console redpanda-init`) e mantenha a topologia acima.
+O `docker-compose.yml` sobe o ambiente completo por padrão: infraestrutura, os cinco serviços e o frontend. Nesse modo os processos rodam na rede do Compose e o gateway resolve os serviços por nome (`http://identity-service:8081`) em vez de `localhost`. Para rodar as aplicações no host, suba apenas os serviços de infraestrutura (`docker compose up -d postgres redis redpanda redpanda-console redpanda-init`); nesse caso os processos saem do subgrafo `Docker Compose` e passam para a máquina, mantendo as mesmas portas.
+
+Cada container de aplicação tem teto de memória (`mem_limit`): 512 MB por serviço backend e 448 MB para o frontend, com heap proporcional ao teto. Detalhes, tabela de valores e como ajustar em [`05-operacao.md`](05-operacao.md) §3.7.
 
 ### 7.2 Portas e bancos
 
@@ -661,6 +665,7 @@ O `docker-compose.yml` sobe o ambiente completo por padrão: infraestrutura, os 
 | [`0012`](09-decisoes/0012-kit-desenvolvimento-em-containers.md) | Kit de desenvolvimento com Compose em dois modos | Substituído por 0013 |
 | [`0013`](09-decisoes/0013-compose-unico-com-tudo.md) | Compose único com infraestrutura, backend e frontend | Aceito |
 | [`0014`](09-decisoes/0014-remocao-do-agregador-maven.md) | Remoção do agregador Maven em `backend/` | Aceito |
+| [`0015`](09-decisoes/0015-limites-de-memoria-por-container.md) | Limites de memória por container | Aceito |
 
 ---
 

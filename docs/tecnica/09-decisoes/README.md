@@ -42,6 +42,7 @@ Sem esse registro, cada refatoração futura rediscute decisões já tomadas ou,
 | [0012](0012-kit-desenvolvimento-em-containers.md) | Kit de desenvolvimento com Compose em dois modos | Substituído por 0013 | Operacional |
 | [0013](0013-compose-unico-com-tudo.md) | Compose único com infraestrutura, backend e frontend | Aceito | Operacional |
 | [0014](0014-remocao-do-agregador-maven.md) | Remoção do agregador Maven em `backend/` | Aceito | Estrutural |
+| [0015](0015-limites-de-memoria-por-container.md) | Limites de memória por container | Aceito | Operacional |
 
 ### 2.1 Decisões que faltam registrar
 

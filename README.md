@@ -149,6 +149,8 @@ A primeira subida compila 6 imagens e leva de 10 a 20 minutos; as seguintes usam
 | http://localhost:8080/swagger-ui.html | Swagger agregado |
 | http://localhost:8085 | Console do Redpanda |
 
+Cada container de aplicação tem teto de memória: **512 MB** por serviço backend e **448 MB** no frontend. O heap acompanha o teto (40% nos serviços Java, 192 MB de old space no Node), então o ambiente completo fica em ~3 GB de teto em vez de consumir o que a máquina tiver. Para ver o consumo real: `docker stats --no-stream`.
+
 ### Só a infraestrutura (apps nativas, com hot reload)
 
 ```powershell

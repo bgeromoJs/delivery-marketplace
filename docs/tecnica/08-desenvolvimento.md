@@ -615,6 +615,8 @@ cd mobile\vendedor-android
 
 Cada serviço e o frontend têm `Dockerfile` multi-stage próprio, versionado no respectivo repositório. O `docker-compose.yml` do guarda-chuva apenas referencia esses contextos.
 
+Em containers, cada aplicação tem teto de memória: 512 MB por serviço backend e 448 MB no frontend, com heap proporcional ao teto (`JAVA_MAX_RAM_PERCENTAGE=40` nos serviços e `--max-old-space-size=192` no Node). Ao rodar nativamente, esses limites não se aplicam — o processo usa o heap que o JVM ou o Node dimensionarem para a máquina. Valores e ajuste em [`05-operacao.md`](05-operacao.md) §3.7 e [ADR 0015](09-decisoes/0015-limites-de-memoria-por-container.md).
+
 Detalhes, ordem de subida e troubleshooting em [`05-operacao.md`](05-operacao.md).
 
 ---
