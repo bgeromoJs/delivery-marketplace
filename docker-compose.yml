@@ -119,6 +119,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: postgrespassword
       JWT_SECRET: ${JWT_SECRET:-deliveryhub-local-only-secret-key-change-before-deploy-2026}
       APP_SEED_DEMO_DATA: ${APP_SEED_DEMO_DATA:-false}
+      # Validação do link do estabelecimento em /api/customers/me/stores.
+      SERVICES_TENANT_URL: http://tenant-service:8082
     ports:
       - "8081:8081"
     depends_on:
