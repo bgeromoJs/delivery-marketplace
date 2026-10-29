@@ -4,7 +4,7 @@
 |---|---|
 | Status | Implementado / Parcial (ver matriz) |
 | Público | Produto, engenharia, operações e novos integrantes |
-| Última revisão | 2026-10-26 |
+| Última revisão | 2026-10-28 |
 | Fonte de verdade | Código em `backend/`, `frontend/`, `mobile/` e configurações do repositório |
 
 ---
@@ -31,7 +31,7 @@
 
 O projeto implementa um marketplace de delivery com cinco perfis:
 
-- **Cliente**: acessa a loja por um link com slug, monta o carrinho, escolhe pagamento e acompanha o pedido.
+- **Cliente**: entra no app com a conta `CUSTOMER`; as lojas entram na conta quando ele abre o link do estabelecimento. Monta o carrinho, escolhe pagamento e acompanha o pedido.
 - **Vendedor**: gerencia a loja, o cardápio e a fila de pedidos.
 - **Entregador**: visualiza ofertas, aceita corridas e atualiza a entrega.
 - **Analista de suporte**: opera a fila do painel, consulta lojas, entregadores e pedidos, sem gerir usuários ou configurações.
@@ -47,16 +47,18 @@ A implementação atual é um **MVP funcional de ponta a ponta**, com pagamento 
 
 | Capacidade | O que o sistema entrega hoje |
 |---|---|
-| Loja white-label | Tema (cores, logo, banner), slug, taxa e prazo de entrega por loja. |
+| Tema por loja | Tema (cores, logo, banner), slug, taxa e prazo de entrega por loja; o app cliente é único e assume a marca da loja ativa. |
 | Catálogo | Pratos com categoria, preço, descrição, imagem, disponibilidade, esforço de cozinha por unidade e metadados de horário/opcionais em JSON. |
 | Checkout | Criação de pedido com itens, endereço, pagamento, taxa e escolha de janela de produção; o pedido nasce como `PAID` (pagamento simulado). |
 | Agenda de produção | Cada pedido reserva um intervalo calculado pelo esforço dos pratos; a agenda considera a carga ativa da cozinha. |
-| Agenda pública | Cliente escolhe o dia em `/loja/{slug}/agenda` e vê os pedidos na ordem de execução, sem dados pessoais. |
+| Agenda pública | Cliente escolhe o dia na web `/loja/{slug}/agenda` ou na aba **Agenda** do app vendedor e vê os pedidos na ordem de execução, sem dados pessoais. |
 | Operação do vendedor | Fila de pedidos, aceite, preparo, pronto, recusa, pedidos de balcão e agenda de produção por dia no app Android. |
 | Operação do entregador | Lista de pedidos `READY` sem entregador, aceite, retirada e entrega (simulador web). |
 | Administração | CRUD de lojas, usuários e configurações, auditoria, leitura e cancelamento de pedidos. |
 | Autenticação | Login, JWT, cadastro público de cliente e recuperação de senha de `ADMIN` por SMS. |
 | App vendedor Android | Login, dados da loja, pagamentos, pedidos, cardápio e agenda de produção. |
+| App cliente Android | Login obrigatório (e-mail/senha ou Google), lista de estabelecimentos vinculados pelo link da loja, cardápio, carrinho, checkout com janelas, histórico de pedidos com comanda de acompanhamento e perfil com endereços e cartões. |
+| Meus estabelecimentos | Cada loja cujo link o cliente abriu entra na conta (`customer_stores`) e na lista inicial do app; com uma única loja o cardápio abre direto. |
 
 ---
 
@@ -70,8 +72,12 @@ A implementação atual é um **MVP funcional de ponta a ponta**, com pagamento 
 - Vê o esforço de cozinha do carrinho e escolhe entre a próxima janela disponível ou uma janela específica.
 - Cria o pedido em `POST /api/orders`; a criação reserva a agenda da cozinha.
 - Pode abrir `/loja/{slug}/agenda`, escolher o dia e acompanhar os pedidos na ordem de execução. O próprio pedido é destacado por um número salvo no `localStorage`.
-- A página mantém o pedido ativo em memória e permite **avançar o status manualmente** para simular o acompanhamento (`PAID` → `ACCEPTED` → `PREPARING` → `READY` → `DELIVERED`).
-- Não há login de cliente, histórico, endereço salvo ou rastreamento real.
+- No app Android, o login é obrigatório: entra com conta `CUSTOMER` (e-mail/senha ou Google), monta o carrinho, escolhe endereço e cartão salvos, agenda a entrega e acompanha o pedido na aba **Pedidos**, com histórico do mais recente para o mais antigo e comanda com a linha do tempo do status.
+- A loja **não** vem do build: o cliente abre o link do estabelecimento (`deliveryhub://loja/{slug}` ou `https://.../loja/{slug}`). O app valida o slug em `GET /api/tenants/{slug}/theme` e grava o vínculo em `POST /api/customers/me/stores`; a loja passa a aparecer na lista inicial e o cliente entra na lista de clientes daquela loja.
+- Com uma única loja vinculada o app abre o cardápio direto; com duas ou mais mostra a lista de estabelecimentos. A aba **Lojas** aparece nesse estado; dentro do cardápio, o botão **Trocar** volta para a lista e troca de loja limpa o carrinho, com aviso.
+- O histórico de pedidos é global (todas as lojas) e cada pedido exibe o nome da loja no card e na comanda.
+- A página web mantém o pedido ativo em memória e permite **avançar o status manualmente** para simular o acompanhamento (`PAID` → `ACCEPTED` → `PREPARING` → `READY` → `DELIVERED`).
+- Na web não há login de cliente, histórico, endereço salvo ou rastreamento real; essas capacidades existem apenas no app Android, que também não tem mapa do entregador (ver [§5](#5-escopo-implementado-por-capacidade) e [`03-api.md`](03-api.md#11-lacunas-conhecidas-do-contrato)).
 
 ### 4.2 Vendedor
 
@@ -119,7 +125,7 @@ Limitação importante: as chamadas do vendedor web para catálogo e pedidos **n
 | Cardápio do vendedor | **Implementado** | `StoreCatalogController` | Lista todos os pratos, não só os da loja; campos JSON são texto livre. |
 | Esforço de cozinha por prato | **Implementado** | `Dish.effortMinutes`, `PUT /api/store/me/dishes/{id}` | Default `20`; catálogo prevalece sobre o valor enviado no checkout. |
 | Agenda de produção | **Implementado** | `SchedulingService`, `POST /api/orders/availability` | Reserva por esforço e janelas; horário local sem fuso; sem histórico de reagendamento. |
-| Agenda pública da cozinha | **Implementado** | `OrderService.getAgenda`, `/loja/{slug}/agenda`, `AgendaScreen` | Sanitizada; consumida pela web do cliente e pela aba Agenda do app vendedor; sem autenticação, paginação ou SSE (polling de 30 s). |
+| Agenda pública da cozinha | **Implementado** | `OrderService.getAgenda`, `/loja/{slug}/agenda`, `ui/agenda/AgendaScreen.kt` | Sanitizada; consumida pela web do cliente e pela aba Agenda do app vendedor; sem autenticação, paginação ou SSE (polling de 30 s). |
 | Criação de pedido | **Implementado** | `OrderService.createOrder` | Nasce `PAID` e reserva a agenda; sem validação de preço, existência do prato ou tenant. |
 | Fila do vendedor | **Implementado** | `StoreOrderController` | Lista pedidos de todas as lojas; preparo em FIFO por `preparingAt`; sem paginação. |
 | Pedido de balcão | **Implementado** | `POST /api/store/me/orders/counter` | Nasce `PREPARING`, taxa zero, origem `COUNTER`. |
@@ -128,6 +134,8 @@ Limitação importante: as chamadas do vendedor web para catálogo e pedidos **n
 | Pagamentos | **Parcial** | `StoreController` | Métodos em memória; não persiste; propostas são no-op. |
 | Administração | **Implementado** | `AuthController`, `TenantController`, `AdminConfigurationService` | Sem métricas financeiras; auditoria só de ações administrativas. |
 | App vendedor Android | **Implementado** | `ApiService.kt`, `SessionStore.kt`, `ui/agenda/AgendaScreen.kt` | Agenda por dia com seleção de data e polling de 30 s. Atualização de pagamentos ainda com payload incompatível. |
+| App cliente Android | **Implementado** | `cliente-android/app/.../LoginScreen.kt`, `ClienteApp.kt`, `ClienteViewModel.kt`, `StoresScreen.kt`, `OrdersScreen.kt`, `OrderDetailScreen.kt` | Login `CUSTOMER` obrigatório, lista de estabelecimentos vinculados pelo link, cardápio, carrinho, checkout, histórico de pedidos com comanda e perfil. O APK não carrega mais a loja (`STORE_SLUG` removido). Sem push, mapa de entregador em tempo real, pagamento real ou avaliação. |
+| Meus estabelecimentos | **Implementado** | `CustomerStoreController`, `CustomerStoreService`, `CustomerStore`, `StoresScreen.kt` | Vinculados por link; idempotente; limite de 50 lojas por cliente; slug validado no tenant-service (indisponível → 503). |
 | Tempo real do vendedor | **Implementado** | `SseOrderEventRegistry`, `GET /api/store/me/orders/stream` | SSE em memória por instância; app Android reconecta com backoff. |
 | Tempo real do entregador | **Planejado** | — | Entregador faz polling de 8 s. |
 | Mensageria | **Parcial** | `KafkaOrderEventPublisher` | Producer do tópico `order-events`; nenhum consumidor implementado. |
@@ -153,7 +161,7 @@ O documento [`../arquitetura.md`](../arquitetura.md) descreve uma plataforma sig
 - Row-Level Security e propagação de `tenant_id` por JWT/header.
 - Kubernetes, service mesh, Terraform, GitOps, canary/blue-green.
 - Observabilidade com OpenTelemetry, Prometheus, Grafana, Loki, Tempo e Sentry.
-- App cliente Android/iOS e deep links.
+- App cliente iOS e publicação nas lojas de aplicativos.
 - Split de pagamento, repasses e conciliação financeira.
 
 Esses itens podem orientar o roadmap, mas qualquer afirmação de que já existem é incorreta.
@@ -172,6 +180,7 @@ Esses itens podem orientar o roadmap, mas qualquer afirmação de que já existe
 | `docs/arquitetura.md` | `GET /tenants/{slug}/theme` | O caminho real é `/api/tenants/{slug}/theme`. | Usar o caminho real. |
 | Página inicial do frontend | “GMV, comissões de 12%, repasses” | Não há cálculo financeiro no backend. | Tratar como visão de produto. |
 | Tela de pagamentos do Android | Envia `config` | Backend lê `enabledMethods`. | Defeito conhecido; ver `03-api.md`. |
+| `docs/arquitetura.md` e protótipo | Link público da loja no formato `https://<domínio>/l/<slug>` | O web serve a loja em `/loja/<slug>`; não existe rota `/l/` no frontend. | Divergente: o cadastro de vendedor exibe `/l/` como padrão. Definir o formato canônico antes de divulgar links. |
 
 ---
 
@@ -193,6 +202,8 @@ Esses itens podem orientar o roadmap, mas qualquer afirmação de que já existe
 |---|---|
 | **Tenant / loja** | Unidade de negócio isolada, identificada por `id` (UUID) e `slug` único. |
 | **Slug** | Identificador legível usado na URL da loja, por exemplo `pizzaria-do-joao`. |
+| **Link do estabelecimento** | `deliveryhub://loja/{slug}` ou `https://.../loja/{slug}`; vincula a loja à conta do cliente e a coloca na lista inicial do app. |
+| **Meus estabelecimentos** | Lista das lojas vinculadas à conta do cliente (`customer_stores` no identity-service). |
 | **Tema** | Conjunto de dados visuais da loja: logo, banner, cores e dados de entrega. |
 | **Dish / prato** | Item de catálogo com nome, categoria, preço, disponibilidade e esforço de cozinha por unidade. |
 | **Esforço de cozinha** | Minutos de produção por unidade de um prato (`effortMinutes`); o pedido reserva `Σ esforço × quantidade`. |

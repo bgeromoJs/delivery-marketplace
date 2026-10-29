@@ -4,7 +4,7 @@
 |---|---|
 | Status | Documentação as-is do código atual |
 | Público | Engenharia, produto, operações, QA e revisores técnicos |
-| Última revisão | 2026-10-27 |
+| Última revisão | 2026-10-28 |
 | Referência de código | `master` em `a89f1b1` + submódulos + alterações locais no diretório de trabalho |
 | Fonte de verdade | Código, configurações, migrações e contratos expostos pelo runtime |
 
@@ -35,14 +35,15 @@
 |---|---|---|
 | API Gateway | **Implementado** | Spring Cloud Gateway MVC na porta `8080`; roteia HTTP e agrega Swagger. |
 | Autenticação | **Implementado** | Login, registro, JWT HS256, recuperação de senha por SMS. |
-| Autorização | **Parcial** | Apenas rotas administrativas e mutações de tenant são restritas no gateway; catálogo, pedidos e app vendedor estão abertos. |
+| Autorização | **Parcial** | Rotas administrativas, mutações de tenant e `/api/customers/**` são restritas no gateway; catálogo, pedidos e app vendedor estão abertos. |
 | Lojas (tenant) | **Implementado** | CRUD administrativo, tema por slug, status e configurações de entrega. |
+| Cliente | **Implementado** | Conta `CUSTOMER` com perfil, endereços, cartões e estabelecimentos vinculados pelo link da loja (`customer_stores`). |
 | Catálogo | **Implementado** | Pratos, categorias, disponibilidade, esforço de cozinha e campos JSON de horários/opcionais. |
 | Pedidos | **Parcial** | Criação com reserva de agenda, listagem, mudança de status, agenda pública e eventos (SSE + Kafka producer); pagamento simulado; sem máquina de estados, idempotência ou consumidor Kafka. |
 | Entregadores | **Parcial** | Cadastro de conta e listagem de entregadores por loja; sem dispatch, tracking ou app dedicado. |
 | Pagamentos | **Parcial** | Métodos são exibidos e editáveis apenas em memória; não há integração com PSP. |
 | Frontend web | **Implementado** | Next.js 16 com áreas de cliente, vendedor, entregador e admin. |
-| App Android | **Implementado** | Dois apps Kotlin/Compose: cliente e vendedor, ambos com Retrofit e sessão local. |
+| App Android | **Implementado** | Dois apps Kotlin/Compose: cliente multi-loja (login, estabelecimentos pelo link, cardápio, carrinho, checkout, pedidos e perfil) e vendedor (loja, pagamentos, pedidos, cardápio e agenda), ambos com Retrofit e sessão local. O cliente deixou de ser white-label — [ADR 0016](09-decisoes/0016-app-cliente-multi-loja-com-vinculo-por-link.md). |
 | Mensageria | **Parcial** | O order-service publica `order-events` no Redpanda e entrega por SSE; não há consumidor Kafka. |
 | Cache | **Planejado** | Redis está no Docker Compose, mas não é usado pelo código. |
 | Observabilidade | **Parcial** | Apenas Actuator `health` e `info`; sem métricas, tracing ou logs estruturados. |

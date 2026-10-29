@@ -4,7 +4,7 @@
 |---|---|
 | Status | Implementado; multi-tenancy parcial |
 | Público | Engenharia, DBA, operações, segurança e QA |
-| Última revisão | 2026-10-26 |
+| Última revisão | 2026-10-28 |
 | Banco | PostgreSQL 16 |
 | Migrações | Liquibase (SQL) |
 | Fonte de verdade | `db/changelog/changes/*.sql` e entidades JPA |
@@ -50,6 +50,9 @@ CREATE DATABASE order_db;
 erDiagram
     USERS ||--o{ PASSWORD_RESET_TOKENS : "user_id (lógico)"
     USERS ||--o{ ADMIN_AUDIT_ENTRIES : "actor_user_id (lógico)"
+    USERS ||--o{ CUSTOMER_ADDRESSES : "user_id"
+    USERS ||--o{ CUSTOMER_CARDS : "user_id"
+    USERS ||--o{ CUSTOMER_STORES : "user_id"
     USERS {
         uuid id PK
         varchar name
@@ -59,6 +62,8 @@ erDiagram
         varchar role
         uuid tenant_id
         boolean active
+        varchar google_sub UK
+        varchar food_preferences
         timestamp created_at
     }
     PLATFORM_SETTINGS {
@@ -84,14 +89,52 @@ erDiagram
         varchar description
         timestamp created_at
     }
+    CUSTOMER_ADDRESSES {
+        uuid id PK
+        uuid user_id FK
+        varchar label
+        varchar street
+        varchar number
+        varchar complement
+        varchar district
+        varchar city
+        varchar state
+        varchar zip_code
+        varchar reference
+        boolean is_default
+        timestamp created_at
+    }
+    CUSTOMER_CARDS {
+        uuid id PK
+        uuid user_id FK
+        varchar brand
+        varchar last4
+        varchar holder_name
+        int expiry_month
+        int expiry_year
+        boolean is_default
+        timestamp created_at
+    }
+    CUSTOMER_STORES {
+        uuid id PK
+        uuid user_id FK
+        varchar slug
+        uuid tenant_id
+        varchar name
+        varchar logo_url
+        timestamp created_at
+    }
 ```
 
 | Tabela | Campos principais | Regras |
 |---|---|---|
-| `users` | `id`, `name`, `email`, `password`, `phone`, `role`, `tenant_id`, `active`, `created_at` | `email` único; `password` BCrypt; `role` é `ADMIN`, `SUPPORT`, `SELLER`, `COURIER` ou `CUSTOMER`; `tenant_id` é lógico, sem FK; `active=false` bloqueia o login; `tenant_id` é obrigatório para `SELLER` e proibido para `ADMIN`/`SUPPORT` na camada de serviço. |
+| `users` | `id`, `name`, `email`, `password`, `phone`, `role`, `tenant_id`, `active`, `google_sub`, `food_preferences`, `created_at` | `email` único; `password` BCrypt; `role` é `ADMIN`, `SUPPORT`, `SELLER`, `COURIER` ou `CUSTOMER`; `tenant_id` é lógico, sem FK; `active=false` bloqueia o login; `tenant_id` é obrigatório para `SELLER` e proibido para `ADMIN`/`SUPPORT` na camada de serviço; `google_sub` único quando preenchido; `food_preferences` é uma lista separada por vírgula (`VEGETARIAN`, `VEGAN`, `GLUTEN_FREE`, `LACTOSE_FREE`). |
 | `platform_settings` | `id=1`, `payment_proposal_validity_hours`, `order_without_courier_alert_minutes`, `store_link_domain` | Linha única; valores padrão `24`, `12`, `deliveryhub.com.br`. |
 | `password_reset_tokens` | `id`, `token_hash`, `user_id`, `expires_at`, `created_at`, `attempts_remaining` | `token_hash` único; HMAC-SHA256; 5 tentativas; validade de 10 min. |
 | `admin_audit_entries` | `id`, `actor_user_id`, `actor_email`, `action`, `target`, `description`, `created_at` | `action` até 80, `target` até 180, `description` até 500. |
+| `customer_addresses` | `id`, `user_id`, `label`, `street`, `number`, `complement`, `district`, `city`, `state`, `zip_code`, `reference`, `is_default`, `created_at` | FK para `users` com `ON DELETE CASCADE`; apenas um endereço padrão por cliente é garantido na camada de serviço (sem constraint no banco). |
+| `customer_cards` | `id`, `user_id`, `brand`, `last4`, `holder_name`, `expiry_month`, `expiry_year`, `is_default`, `created_at` | FK para `users` com `ON DELETE CASCADE`; guarda apenas bandeira e quatro últimos dígitos; número completo e CVV nunca são persistidos. |
+| `customer_stores` | `id`, `user_id`, `slug`, `tenant_id`, `name`, `logo_url`, `created_at` | FK para `users` com `ON DELETE CASCADE`; índice único `(user_id, slug)` garante idempotência; `tenant_id` é lógico (sem FK, banco separado) e é a ponte para o tenant-service; `name`/`logo_url` são o retrato do momento do vínculo. |
 
 ### 3.2 Tenant
 
@@ -273,7 +316,7 @@ Consequências:
 
 | Serviço | Changesets | Observação |
 |---|---|---|
-| identity | `identity-001` a `008` | Cria usuários, settings, reset e auditoria; `006` limpa dados; `007` adiciona `users.active`; `008` recria a constraint `users_role_check` incluindo `SUPPORT`. |
+| identity | `identity-001` a `010` | Cria usuários, settings, reset e auditoria; `006` limpa dados; `007` adiciona `users.active`; `008` recria a constraint `users_role_check` incluindo `SUPPORT`; `009` adiciona `google_sub`, `food_preferences`, `customer_addresses` e `customer_cards`; `010` cria `customer_stores` (lojas vinculadas ao cliente pelo link). |
 | tenant | `tenant-001`, `tenant-002`, `tenant-003` | Cria tenants; `002` limpa; `003` cria couriers. |
 | catalog | `catalog-001` a `004` | Cria dishes; `002` limpa; `003` adiciona campos JSON; `004` adiciona `effort_minutes` com default `20`. |
 | order | `order-001` a `006` | Cria orders/items; `002` limpa; `003` adiciona `order_number`; `004` adiciona `origin`; `005` adiciona `preparing_at` e preenche a fila existente; `006` adiciona reserva de agenda (`reserved_effort_minutes`, `scheduled_start`, `scheduled_end`, `scheduled_window`) e `order_items.effort_minutes`. |
@@ -341,6 +384,8 @@ Com `app.seed.demo-data=true` no identity:
 
 > `ADMIN_PHONE` só é usado na criação inicial. Alterar a variável depois não atualiza um usuário já existente. Sem telefone, a redefinição de senha do admin não funciona.
 
+> Essas contas são o único caminho de bootstrap de um `ADMIN`: o cadastro público cria apenas `CUSTOMER` e a gestão de usuários exige token `ADMIN`. O procedimento completo, incluindo o `INSERT` manual quando o banco não está vazio, está em [`05-operacao.md`](05-operacao.md#62-primeiro-acesso-e-usuário-inicial).
+
 ### 5.3 Lojas demo
 
 | ID | Nome | Slug | Taxa | Prazo |
@@ -382,8 +427,9 @@ Com `app.seed.demo-data=true` no identity:
 ### 7.1 O que existe
 
 - PKs em todas as tabelas.
-- Unique em `users.email`, `tenants.slug`, `password_reset_tokens.token_hash`.
-- FK real apenas em `order_items.order_id → orders.id`.
+- Unique em `users.email`, `tenants.slug`, `password_reset_tokens.token_hash`, `users.google_sub` (índice parcial, quando preenchido) e `customer_stores (user_id, slug)`.
+- FK real apenas em `order_items.order_id → orders.id`; as tabelas de cliente (`customer_addresses`, `customer_cards`, `customer_stores`) têm FK para `users.id` com `ON DELETE CASCADE`.
+- Índices de apoio em `customer_addresses.user_id`, `customer_cards.user_id`, `customer_stores.user_id` e `customer_stores.tenant_id`.
 
 ### 7.2 O que falta
 
@@ -486,7 +532,10 @@ Com `app.seed.demo-data=true` no identity:
 | Nome | `users`, `orders.customer_name`, `couriers.name` | Identificação e operação. |
 | E-mail | `users.email`, `admin_audit_entries.actor_email`, `tenants.owner_email` | Login, contato e auditoria. |
 | Telefone | `users.phone`, `orders.customer_phone`, `tenants.phone/owner_phone` | Contato e SMS. |
-| Endereço | `orders.delivery_address`, `tenants.address` | Entrega. |
+| Endereço | `orders.delivery_address`, `customer_addresses`, `tenants.address` | Entrega. |
+| Cartão (referência) | `customer_cards` | Bandeira, quatro últimos dígitos, titular e validade; sem número completo ou CVV. |
+| Preferências alimentares | `users.food_preferences` | Filtro de cardápio; dado sensível por inferência (saúde/religião) e sem base legal explícita. |
+| Lojas de interesse | `customer_stores` | Vínculo criado pelo link do estabelecimento; revela relação cliente↔loja para a loja. |
 | Observações | `orders.notes` | Instruções do pedido. |
 | Documento | `tenants.document` | Cadastro da loja. |
 
@@ -581,6 +630,19 @@ SELECT o.order_number, i.dish_name, i.quantity, i.unit_price, i.total_price
 FROM orders o
 JOIN order_items i ON i.order_id = o.id
 WHERE o.order_number = '4822';
+
+-- Lojas vinculadas a um cliente (identity_db)
+SELECT u.email, cs.slug, cs.tenant_id, cs.name, cs.created_at
+FROM customer_stores cs
+JOIN users u ON u.id = cs.user_id
+ORDER BY cs.created_at DESC;
+
+-- Clientes que abriram o link de uma loja (identity_db)
+SELECT u.name, u.email, cs.created_at
+FROM customer_stores cs
+JOIN users u ON u.id = cs.user_id
+WHERE cs.tenant_id = '398935eb-36c3-4574-acbc-3b37a6cefa61'
+ORDER BY cs.created_at;
 ```
 
 ---

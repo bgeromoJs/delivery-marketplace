@@ -4,7 +4,7 @@
 |---|---|
 | Status | Autenticação implementada; autorização e isolamento multi-tenant parciais |
 | Público | Engenharia, segurança, operações e revisores |
-| Última revisão | 2026-10-26 |
+| Última revisão | 2026-10-28 |
 | Escopo | Autenticação, autorização, sessão, segredos, CORS, LGPD e modelo de ameaças |
 | Fonte de verdade | `SecurityConfiguration`, `JwtConfiguration`, `CorsConfiguration`, `AuthService`, `application.yml` e controllers |
 
@@ -237,6 +237,10 @@ Pontos de atenção:
 
 Um token copiado continua válido até o `exp`, mesmo após logout. Em caso de incidente, a única contenção é trocar `JWT_SECRET` (invalida **todos** os usuários) ou aguardar 60 minutos.
 
+Os dois apps Android usam o mesmo `SessionStore` em `EncryptedSharedPreferences` e o mesmo interceptor OkHttp. O app cliente exige login antes de exibir cardápio, carrinho, pedidos ou conta e só aceita contas com papel `CUSTOMER`: um login bem-sucedido de outro perfil é descartado no cliente (`acceptCustomerAccount`) e a sessão é limpa.
+
+O app cliente guarda apenas o token em `EncryptedSharedPreferences`; a lista de estabelecimentos **não** é local: é recarregada de `GET /api/customers/me/stores` a cada abertura e exige token válido. O vínculo criado pelo link da loja também é do servidor, então trocar de aparelho não perde a lista nem duplica vínculos.
+
 ---
 
 ## 4. Autorização
@@ -248,12 +252,13 @@ Um token copiado continua válido até o `exp`, mesmo após logout. Em caso de i
 ```java
 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-.requestMatchers("/api/auth/login", "/api/auth/register",
+.requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/google",
                  "/api/auth/password/forgot", "/api/auth/password/reset",
                  "/actuator/health").permitAll()
 .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
 .requestMatchers(HttpMethod.GET, "/api/auth/users", "/api/auth/users/**").hasAnyRole("ADMIN", "SUPPORT")
 .requestMatchers("/api/auth/users", "/api/auth/users/**").hasRole("ADMIN")
+.requestMatchers("/api/customers/**").hasRole("CUSTOMER")
 .requestMatchers(HttpMethod.POST, "/api/tenants").hasRole("ADMIN")
 .requestMatchers(HttpMethod.PUT, "/api/tenants/**").hasRole("ADMIN")
 .requestMatchers(HttpMethod.PATCH, "/api/tenants/**").hasRole("ADMIN")
@@ -284,6 +289,21 @@ Legenda: **Público** = sem token; **ADMIN** = token com `role=ADMIN`; **SUPPORT
 | POST | `/api/auth/admin/users/{id}/seller-link` | ADMIN | ADMIN | **ADMIN** |
 | GET/PUT | `/api/auth/admin/settings` | ADMIN | ADMIN | **ADMIN** |
 | GET/POST | `/api/auth/admin/audit` | ADMIN | ADMIN | **ADMIN** |
+
+#### Cliente (`/api/customers/**`, identity `:8081`)
+
+| Método | Caminho | Gateway | Serviço | Efetivo |
+|---|---|---|---|---|
+| GET/PUT | `/api/customers/me` | CUSTOMER | CUSTOMER | **CUSTOMER** |
+| GET/POST | `/api/customers/me/addresses` | CUSTOMER | CUSTOMER | **CUSTOMER** |
+| PUT/DELETE | `/api/customers/me/addresses/{id}` | CUSTOMER | CUSTOMER | **CUSTOMER** |
+| PATCH | `/api/customers/me/addresses/{id}/default` | CUSTOMER | CUSTOMER | **CUSTOMER** |
+| GET/POST | `/api/customers/me/cards` | CUSTOMER | CUSTOMER | **CUSTOMER** |
+| PATCH/DELETE | `/api/customers/me/cards/{id}` | CUSTOMER | CUSTOMER | **CUSTOMER** |
+| GET/POST | `/api/customers/me/stores` | CUSTOMER | CUSTOMER | **CUSTOMER** |
+| DELETE | `/api/customers/me/stores/{slug}` | CUSTOMER | CUSTOMER | **CUSTOMER** |
+
+O `userId` vem sempre do `sub` do JWT; nenhum endpoint aceita `userId` no caminho ou no corpo. O `CustomerStoreService` ainda valida que a conta é `CUSTOMER` e está ativa antes de gravar o vínculo.
 
 #### Tenant (`:8082`)
 
@@ -531,6 +551,8 @@ O `TRACE` de bind parameters é especialmente relevante: ele existe nos `applica
 | **Information disclosure** | `GET /api/orders/tenant/{tenantId}/agenda` expõe movimento, itens e horários da loja | Payload sanitizado; endpoint público | **Médio** |
 | **Information disclosure** | Tópico `order-events` sem autenticação contém nome, telefone e endereço do cliente | Broker sem SASL/TLS; console aberto | **Alto** |
 | **Information disclosure** | `GET /api/tenants` expõe CNPJ e contato do proprietário | Nenhum | **Alto** |
+| **Information disclosure** | Vínculo `customer_stores` revela a relação cliente↔loja para a loja, sem consentimento explícito | Acesso fica no identity e só o próprio cliente lista; loja ainda não tem endpoint | **Médio** |
+| **Spoofing** | Cliente adiciona qualquer loja ativa colando o slug, sem convite | `POST /api/customers/me/stores` valida o slug, não a origem | **Baixo** |
 | **Denial of service** | `GET /api/orders` sem paginação; login sem rate limit | Nenhum | **Alto** |
 | **Elevation of privilege** | Acessar `:8082`–`:8084` direto e ignorar o gateway | Serviços sem autenticação | **Crítico** |
 | **Elevation of privilege** | `SELLER` opera em loja diferente da sua | Resolução pelo primeiro tenant | **Crítico** |
@@ -560,6 +582,7 @@ Nenhum passo exige credencial legítima. Esse é o motivo de o item P0-1 do chec
 | Criação/edição de loja | Parcial | Auditoria administrativa via frontend, não no serviço |
 | Escrita de catálogo | Não | — |
 | Mudança de status de pedido | Não | — |
+| Vínculo/remoção de loja do cliente | Não | — |
 | Acesso negado (403) | Não | — |
 | Erro 500 | Log de aplicação | stdout |
 

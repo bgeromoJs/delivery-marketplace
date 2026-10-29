@@ -4,7 +4,7 @@
 |---|---|
 | Status | Ambiente local implementado; produção não preparada |
 | Público | Engenharia, operações, suporte e QA |
-| Última revisão | 2026-10-27 |
+| Última revisão | 2026-10-28 |
 | Escopo | Subida, configuração, saúde, troubleshooting e runbooks |
 | Fonte de verdade | POMs, `application.yml`, `docker-compose.yml` e código |
 
@@ -80,7 +80,7 @@ gateway
 web / Android
 ```
 
-O gateway pode subir antes dos serviços, mas as rotas falharão até que eles estejam disponíveis.
+O gateway pode subir antes dos serviços, mas as rotas falharão até que eles estejam disponíveis. O identity só depende do tenant em runtime (validação do link da loja em `POST /api/customers/me/stores`), não na subida.
 
 ### 3.2 Infraestrutura
 
@@ -209,6 +209,8 @@ cd ..\cliente-android
 .\gradlew.bat :app:assembleDebug
 ```
 
+O app cliente não é mais white-label: um único APK serve qualquer loja. As propriedades Gradle são `APP_NAME` (nome do app na gaveta e marca da tela de login sem loja vinculada), `GOOGLE_CLIENT_ID` e `API_BASE_URL` (ver [4.2](#42-frontend-e-android)). A loja chega pelo deep link `deliveryhub://loja/{slug}` ou `https://.../loja/{slug}`.
+
 - Emulador: a URL padrão `http://10.0.2.2:8080/api/` aponta para a máquina host.
 - Dispositivo físico: use o IP da máquina e mantenha a barra final.
 
@@ -218,6 +220,21 @@ cd ..\cliente-android
 
 - O build `debug` permite cleartext HTTP; o `release` usa HTTPS e `usesCleartextTraffic=false`.
 - O app precisa de rede local acessível e firewall liberado na porta `8080`.
+
+Teste do link de estabelecimento (emulador ou aparelho conectado):
+
+```powershell
+# Abre o app pelo link da loja; sem sessão, a loja vira o hero do login e o vínculo
+# é criado logo depois do login.
+adb shell am start -a android.intent.action.VIEW -d "deliveryhub://loja/vera-marmitex" com.deliveryplatform.cliente
+
+# Mesmo link via HTTPS (o host do link é ignorado; o app usa o slug)
+adb shell am start -a android.intent.action.VIEW -d "https://deliveryhub.com.br/loja/vera-marmitex" com.deliveryplatform.cliente
+```
+
+- O app tem `launchMode="singleTop"`: um novo link com o app aberto chega em `onNewIntent` e abre a loja sem reiniciar a sessão.
+- Sem um link em mãos, o build **debug** lista as lojas de `GET /api/tenants` na aba **Lojas**; o build `release` não mostra esse atalho.
+- O link precisa existir no ambiente: `GET /api/tenants/{slug}/theme` responde `200`. Slug inexistente retorna `404` em `POST /api/customers/me/stores`.
 
 ### 3.7 Ambiente completo em containers
 
@@ -236,6 +253,8 @@ Antes da primeira subida, copie as variáveis:
 ```powershell
 Copy-Item .env.example .env
 ```
+
+Com `APP_SEED_DEMO_DATA=true` (o padrão do `.env.example`), o identity cria as contas de demonstração na primeira subida. O painel administrativo abre com `admin@delivery.com` / `admin123`; a lista completa de contas está em §6.4 e o procedimento quando o banco já tem usuários está em §6.2.
 
 Se quiser rodar as aplicações nativamente (com hot reload) e usar o Docker apenas para infraestrutura, suba só esses serviços:
 
@@ -328,7 +347,7 @@ Quando o heap estoura, o processo sai com `ExitOnOutOfMemoryError` e o `restart:
 | `TWILIO_ACCOUNT_SID` | identity | Para SMS | vazio | — |
 | `TWILIO_AUTH_TOKEN` | identity | Para SMS | vazio | — |
 | `TWILIO_FROM_NUMBER` | identity | Para SMS | vazio | Número E.164 do Twilio. |
-| `SERVICES_TENANT_URL` | catalog, order | Não | `http://localhost:8082` | Usado pelo `TenantLookup` e seed. |
+| `SERVICES_TENANT_URL` | identity, catalog, order | Não | `http://localhost:8082` | Usado pelo `TenantLookup`, pelo seed e pelo `TenantStoreLookup` do identity ao vincular a loja ao cliente (timeout 2 s/3 s). |
 | `CATALOG_SERVICE_URL` | order | Não | `http://localhost:8083` | Leitura de esforço e janelas do catálogo; timeout de 2 s. |
 | `SCHEDULING_DEFAULT_EFFORT_MINUTES` | order | Não | `20` | Esforço por unidade quando o prato não tem valor. |
 | `SCHEDULING_MAX_DAYS_AHEAD` | order | Não | `7` | Quantos dias a agenda procura uma janela livre. |
@@ -347,6 +366,8 @@ Quando o heap estoura, o processo sai com `ExitOnOutOfMemoryError` e o `restart:
 | `NEXT_PUBLIC_API_URL` | frontend | URL do gateway; padrão `http://localhost:8080`. |
 | `NODE_OPTIONS` | frontend (imagem Docker) | Padrão `--max-old-space-size=192`. Define o heap do Node em runtime. |
 | `API_BASE_URL` | Android (Gradle property) | URL base com `/api/`; padrão `http://10.0.2.2:8080/api/`. |
+| `APP_NAME` | app cliente (Gradle property) | Nome exibido na gaveta de apps e marca da tela de login sem loja vinculada; padrão `Delivery`. A loja **não** é escolhida no build: chega por `deliveryhub://loja/{slug}` ou `https://.../loja/{slug}`. |
+| `GOOGLE_CLIENT_ID` | app cliente (Gradle property) | Client ID OAuth web; vazio esconde o botão de login Google. |
 
 ### 4.3 Exemplo de `.env` local
 
@@ -405,8 +426,8 @@ $headers = @{ Authorization = "Bearer $token" }
 # 2. Lojas
 Invoke-RestMethod http://localhost:8080/api/tenants?all=true
 
-# 3. Tema
-Invoke-RestMethod http://localhost:8080/api/tenants/pizzaria-do-joao/theme
+# 3. Tema (loja existente no ambiente local)
+Invoke-RestMethod http://localhost:8080/api/tenants/vera-marmitex/theme
 
 # 4. Cardápio
 Invoke-RestMethod "http://localhost:8080/api/catalog/tenants/11111111-1111-1111-1111-111111111111/dishes"
@@ -449,13 +470,68 @@ Invoke-RestMethod http://localhost:8080/api/store/me/orders
 
 ### 6.1 Como ativar
 
+O seed é controlado por `app.seed.demo-data` e só roda com a tabela do serviço vazia.
+
+**Com Docker Compose** — a flag vem do `.env`, que o `docker-compose.yml` injeta em identity, tenant, catalog e order:
+
+```text
+APP_SEED_DEMO_DATA=true
+```
+
+Ela precisa estar definida **antes** do primeiro `up`. Se você alterou depois, recrie os serviços que leem a variável:
+
+```powershell
+docker compose up -d --force-recreate identity-service tenant-service catalog-service order-service
+```
+
+**Rodando nativamente** — variável de ambiente do processo:
+
 ```powershell
 $env:APP_SEED_DEMO_DATA = "true"
 ```
 
 Aplique antes de iniciar identity, tenant e catalog. O order tem seed próprio.
 
-### 6.2 O que cada seed faz
+Nos dois modos, o seeder não age sobre um banco que já tem registros: ele não completa dados parciais. Para recomeçar em desenvolvimento:
+
+```powershell
+docker compose down -v
+docker compose up -d
+```
+
+O `-v` apaga os volumes — bancos e dados incluídos.
+
+### 6.2 Primeiro acesso e usuário inicial
+
+Não existe endpoint de bootstrap. `POST /api/auth/register` cria **apenas** `CUSTOMER` — qualquer outro papel retorna `403` — e `POST /api/auth/admin/users` exige um token `ADMIN`. O primeiro administrador só aparece por uma destas vias:
+
+| Via | Quando usar | Procedimento |
+|---|---|---|
+| Seed | Banco vazio e `APP_SEED_DEMO_DATA=true` | Subir o identity; `DataSeeder` cria as 5 contas de §6.4 |
+| Reset dos volumes | Desenvolvimento; pode perder dados | `docker compose down -v` e subir de novo com a flag |
+| SQL direto | Banco com dados que você precisa manter | `INSERT` em `users`; o primeiro login converte a senha em BCrypt |
+
+Confira o que existe no banco:
+
+```powershell
+docker exec -it delivery-postgres psql -U postgres -d identity_db `
+  -c "select email, role, active from users order by role;"
+```
+
+Se não houver nenhum `ADMIN` ativo, o painel administrativo fica inacessível e a saída é o SQL direto:
+
+```sql
+INSERT INTO public.users (id, name, email, password, role, created_at)
+VALUES (gen_random_uuid(), 'Administrador', 'admin@delivery.com', 'admin123', 'ADMIN', now());
+```
+
+`phone`, `tenant_id`, `active`, `google_sub` e `food_preferences` são opcionais — `active` assume `true` pelo default da coluna.
+
+A senha em texto puro é aceita porque `AuthService.passwordMatches` compara sem hash quando o valor não começa com `$2` e regrava em BCrypt no primeiro login bem-sucedido (ver [`06-seguranca.md`](06-seguranca.md) §3.3). Isso existe para dados legados; use apenas em desenvolvimento.
+
+> O seed não resolve esse caso: `DataSeeder` só roda com `users.count() == 0`, então um único registro existente o desliga por completo.
+
+### 6.3 O que cada seed faz
 
 | Serviço | Condição | Resultado |
 |---|---|---|
@@ -466,7 +542,7 @@ Aplique antes de iniciar identity, tenant e catalog. O order tem seed próprio.
 | order (demo) | flag + tabela vazia | 2 pedidos. |
 | order (sempre) | tabela vazia + tenant acessível | 1 pedido `4822`. |
 
-### 6.3 Contas e lojas
+### 6.4 Contas e lojas
 
 | Papel | E-mail | Senha |
 |---|---|---|
@@ -476,11 +552,11 @@ Aplique antes de iniciar identity, tenant e catalog. O order tem seed próprio.
 | COURIER | `carlos@moto.com` | `entrega123` |
 | CUSTOMER | `maria@gmail.com` | `cliente123` |
 
-Lojas: `pizzaria-do-joao`, `burger-artesanal`, `sushi-prime`.
+Lojas do seed: `pizzaria-do-joao`, `burger-artesanal`, `sushi-prime`. O seed só roda com o banco vazio e `APP_SEED_DEMO_DATA=true`; no ambiente local atual existe apenas `vera-marmitex` (`398935eb-36c3-4574-acbc-3b37a6cefa61`), que é o slug padrão do APK do cliente. As contas acima também dependem do seed; sem elas, cadastre um cliente em `POST /api/auth/register` com `role = CUSTOMER` para testar o app.
 
 > Essas credenciais são públicas no código e existem apenas para desenvolvimento. Nunca as use em ambiente compartilhado.
 
-### 6.4 Desativar
+### 6.5 Desativar
 
 ```powershell
 Remove-Item Env:APP_SEED_DEMO_DATA

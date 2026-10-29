@@ -4,7 +4,7 @@
 |---|---|
 | Status | Implementado (as-is), com itens parciais e planejados indicados |
 | Público | Engenharia, arquitetura, operações e segurança |
-| Última revisão | 2026-10-27 |
+| Última revisão | 2026-10-28 |
 | Estrutura | arc42 (12 seções) + C4 (contexto e containers) |
 | Fonte de verdade | Código, `application.yml`, POMs, `docker-compose.yml` e migrações |
 
@@ -100,7 +100,7 @@ flowchart LR
 
 | Ator | Relação com o sistema |
 |---|---|
-| Cliente | Usa a loja web por slug; pode ter conta `CUSTOMER`, mas o checkout web não exige login. |
+| Cliente | Usa a loja web por slug e o app Android multi-loja. Na web o checkout não exige login; no app Android o login `CUSTOMER` é obrigatório e cada estabelecimento entra na conta pelo link da loja. |
 | Vendedor | Usa a web e o app Android; possui conta `SELLER` vinculada a um tenant. |
 | Entregador | Usa o simulador web; possui conta `COURIER` no admin, mas o simulador não autentica. |
 | Analista de suporte | Usa o painel web; possui conta `SUPPORT`, sem acesso a usuários ou configurações. |
@@ -118,6 +118,7 @@ flowchart LR
 | Gateway → serviços | Interna | HTTP/JSON | Rotas por path; sem descoberta. |
 | Identity → Twilio | Saída | HTTPS | Apenas no fluxo de senha. |
 | Catalog → tenant | Interna | HTTP/JSON | `RestClient` para resolver a loja atual. |
+| Identity → tenant | Interna | HTTP/JSON | `RestClient` (`TenantStoreLookup`) valida o slug em `GET /api/tenants/{slug}/theme` ao vincular a loja ao cliente; timeout de 2 s/3 s e `503` quando o tenant está fora. |
 | Order → tenant | Interna | HTTP/JSON | `RestClient` para resolver a loja atual e no seed. |
 | Serviços → PostgreSQL | Saída | JDBC | Um banco lógico por serviço. |
 | Order → Redpanda | Saída | Kafka protocol | Producer do tópico `order-events`; publicação assíncrona e opcional. |
@@ -148,6 +149,7 @@ flowchart TB
     subgraph CLIENTES["Clientes"]
         WEB["Web Next.js<br/>:3000"]
         AND["App Android<br/>vendedor"]
+        ANDC["App Android<br/>cliente"]
     end
 
     subgraph BORDA["Borda"]
@@ -173,6 +175,7 @@ flowchart TB
 
     WEB -->|"HTTP/JSON"| GW
     AND -->|"HTTP/JSON"| GW
+    ANDC -->|"HTTP/JSON"| GW
     GW --> ID
     GW --> TEN
     GW --> CAT
@@ -183,6 +186,7 @@ flowchart TB
     ORD --> ODB
     CAT -.->|"RestClient"| TEN
     ORD -.->|"RestClient"| TEN
+    ID -.->|"RestClient<br/>valida link"| TEN
     ID -->|"HTTPS"| TWILIO
     ORD -->|"producer"| RP
     ORD -.->|"SSE"| AND
@@ -195,8 +199,9 @@ flowchart TB
 |---|---|---|---|---|
 | **Web** | `3000` | Quatro perfis web: cliente, vendedor, entregador e admin. | — | Gateway |
 | **Android vendedor** | — | App vendedor: login, loja, pagamentos, pedidos, cardápio e agenda de produção. | `EncryptedSharedPreferences` | Gateway |
+| **Android cliente** | — | App cliente multi-loja: login obrigatório `CUSTOMER`, estabelecimentos vinculados pelo link, cardápio, carrinho, checkout, histórico de pedidos com comanda e perfil. | `EncryptedSharedPreferences` | Gateway |
 | **API Gateway** | `8080` | Roteamento, CORS, validação JWT, Swagger agregado. | — | Serviços |
-| **identity-service** | `8081` | Autenticação, usuários, JWT, senha, configurações e auditoria. | `identity_db` | PostgreSQL, Twilio |
+| **identity-service** | `8081` | Autenticação, usuários, JWT, senha, perfil do cliente, estabelecimentos do cliente, configurações e auditoria. | `identity_db` | PostgreSQL, tenant (validação do link), Twilio |
 | **tenant-service** | `8082` | Lojas, tema, entregadores e configurações do app vendedor. | `tenant_db` | PostgreSQL |
 | **catalog-service** | `8083` | Pratos, categorias, disponibilidade, esforço de cozinha e cardápio do vendedor. | `catalog_db` | PostgreSQL, tenant |
 | **order-service** | `8084` | Pedidos, itens, agenda de produção, fila do vendedor, pedidos de balcão, SSE e producer Kafka. | `order_db` | PostgreSQL, tenant, catálogo, Redpanda |
@@ -211,16 +216,17 @@ A ordem das rotas importa: as mais específicas vêm antes de `/api/store/**`.
 | Ordem | Rota | Destino | Path |
 |---|---|---|---|
 | 1 | `identity-service` | `http://localhost:8081` | `/api/auth/**` |
-| 2 | `store-catalog` | `http://localhost:8083` | `/api/store/me/dishes/**` |
-| 3 | `store-orders` | `http://localhost:8084` | `/api/store/me/orders/**` |
-| 4 | `store-service` | `http://localhost:8082` | `/api/store/**` |
-| 5 | `tenant-service` | `http://localhost:8082` | `/api/tenants/**` |
-| 6 | `catalog-service` | `http://localhost:8083` | `/api/catalog/**` |
-| 7 | `order-service` | `http://localhost:8084` | `/api/orders/**` |
-| 8 | `docs-identity` | `http://localhost:8081` | `/v3/api-docs/identity` → `/v3/api-docs` |
-| 9 | `docs-tenant` | `http://localhost:8082` | `/v3/api-docs/tenant` → `/v3/api-docs` |
-| 10 | `docs-catalog` | `http://localhost:8083` | `/v3/api-docs/catalog` → `/v3/api-docs` |
-| 11 | `docs-order` | `http://localhost:8084` | `/v3/api-docs/order` → `/v3/api-docs` |
+| 2 | `customer-service` | `http://localhost:8081` | `/api/customers/**` |
+| 3 | `store-catalog` | `http://localhost:8083` | `/api/store/me/dishes/**` |
+| 4 | `store-orders` | `http://localhost:8084` | `/api/store/me/orders/**` |
+| 5 | `store-service` | `http://localhost:8082` | `/api/store/**` |
+| 6 | `tenant-service` | `http://localhost:8082` | `/api/tenants/**` |
+| 7 | `catalog-service` | `http://localhost:8083` | `/api/catalog/**` |
+| 8 | `order-service` | `http://localhost:8084` | `/api/orders/**` |
+| 9 | `docs-identity` | `http://localhost:8081` | `/v3/api-docs/identity` → `/v3/api-docs` |
+| 10 | `docs-tenant` | `http://localhost:8082` | `/v3/api-docs/tenant` → `/v3/api-docs` |
+| 11 | `docs-catalog` | `http://localhost:8083` | `/v3/api-docs/catalog` → `/v3/api-docs` |
+| 12 | `docs-order` | `http://localhost:8084` | `/v3/api-docs/order` → `/v3/api-docs` |
 
 O gateway usa `spring.cloud.gateway.server.webmvc.routes`, ou seja, a variante **servlet/MVC**. Não há filtro de rate limit, retry, circuit breaker ou remoção de headers internos.
 
@@ -236,7 +242,7 @@ flowchart LR
 
 | Serviço | Controllers | Serviços / repositórios | Observações |
 |---|---|---|---|
-| identity | `AuthController` | `AuthService`, `AdminConfigurationService`, `TwilioSmsService`, `UserRepository`, `PasswordResetTokenRepository`, `PlatformSettingsRepository`, `AdminAuditRepository` | Segurança própria com Spring Security Resource Server. |
+| identity | `AuthController`, `CustomerController`, `CustomerStoreController` | `AuthService`, `CustomerProfileService`, `CustomerStoreService`, `TenantStoreLookup`, `AdminConfigurationService`, `TwilioSmsService`, `UserRepository`, `CustomerAddressRepository`, `CustomerCardRepository`, `CustomerStoreRepository`, `PasswordResetTokenRepository`, `PlatformSettingsRepository`, `AdminAuditRepository` | Segurança própria com Spring Security Resource Server. Vincula a loja ao cliente validando o slug no tenant-service. |
 | tenant | `TenantController`, `StoreController` | `TenantService`, `TenantRepository`, `CourierRepository` | `StoreController` resolve a loja atual pela primeira loja ativa. |
 | catalog | `CatalogController`, `StoreCatalogController` | `CatalogService`, `DishRepository`, `TenantLookup` | Escritas públicas; listagem do vendedor não filtra por loja. |
 | order | `OrderController`, `StoreOrderController` | `OrderService`, `OrderRepository`, `TenantLookup`, `SchedulingService`, `CatalogLookup`, `OrderEventDispatcher`, `KafkaOrderEventPublisher`, seeders | Sem segurança própria; status livre. Reserva agenda na criação e emite SSE/Kafka após o commit. |
@@ -456,6 +462,7 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     participant C as Cliente web
+    participant AC as App cliente Android (checkout)
     participant V as App vendedor Android
     participant G as API Gateway
     participant O as order-service
@@ -464,9 +471,12 @@ sequenceDiagram
 
     C->>G: POST /api/orders/availability
     G->>O: Encaminha
+    AC->>G: POST /api/orders/availability
+    G->>O: Encaminha
     O->>K: Consulta pratos (esforço e janelas)
     O->>DB: SELECT pedidos ativos do tenant
     O-->>C: Janelas + melhor encaixe
+    O-->>AC: Janelas + melhor encaixe
     C->>G: GET /api/orders/tenant/{tenantId}/agenda?date=2026-10-26
     G->>O: Encaminha
     V->>G: GET /api/orders/tenant/{tenantId}/agenda?date=2026-10-26
@@ -479,7 +489,52 @@ sequenceDiagram
 
 O encaixe é calculado em memória a partir dos pedidos ativos (`PAID`, `ACCEPTED`, `PREPARING`) e dos campos `reserved_effort_minutes`, `scheduled_start`, `scheduled_end` e `scheduled_window`. Não há tabela de slots, lock distribuído nem reagendamento: duas criações simultâneas podem reservar o mesmo intervalo.
 
-A agenda pública filtra os pedidos do dia, exclui `CANCELLED` e devolve `AgendaEntryDto` sem nome, telefone, endereço ou valores. A web do cliente e a aba **Agenda** do app vendedor consomem o mesmo endpoint e atualizam a tela a cada 30 s; não há SSE para a agenda.
+A agenda pública filtra os pedidos do dia, exclui `CANCELLED` e devolve `AgendaEntryDto` sem nome, telefone, endereço ou valores. A web do cliente e a aba **Agenda** do app vendedor consomem o mesmo endpoint e atualizam a tela a cada 30 s; não há SSE para a agenda. O app cliente Android consome apenas `POST /api/orders/availability` no checkout e acompanha o próprio pedido em `GET /api/orders/customer/{customerId}`.
+
+### 6.10 Estabelecimentos do cliente pelo link da loja
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Cliente Android
+    participant G as API Gateway
+    participant I as identity-service
+    participant T as tenant-service
+    participant DB as identity_db
+
+    C->>G: Abre deliveryhub://loja/{slug}
+    C->>G: GET /api/tenants/{slug}/theme (público)
+    G->>T: Encaminha
+    T-->>C: Tema (nome, logo, cores, taxa)
+    Note over C: Sem sessão: tema vira hero do login e o slug fica pendente
+    C->>G: POST /api/auth/login (ou /api/auth/google)
+    C->>G: POST /api/customers/me/stores { slug }
+    G->>I: Encaminha (ROLE_CUSTOMER)
+    I->>T: GET /api/tenants/{slug}/theme
+    alt slug inexistente
+        T-->>I: 404
+        I-->>C: 404 "Loja nao encontrada neste ambiente"
+    else tenant indisponível
+        I-->>C: 503
+    else válido
+        T-->>I: tenantId, nome, logo
+        I->>DB: INSERT customer_stores (idempotente por user_id + slug)
+        I-->>C: Vínculo (slug, tenantId, nome, logo)
+    end
+    C->>G: GET /api/customers/me/stores
+    I-->>C: Lista de estabelecimentos + temas
+    C->>G: GET /api/catalog/tenants/{tenantId}/dishes
+    G-->>C: Cardápio da loja
+```
+
+Regras do fluxo:
+
+- A loja **não** é escolhida no build do APK. O `slug` chega pelo deep link (`deliveryhub://loja/{slug}` ou `https://.../loja/{slug}`) e é validado no servidor; o app aceita também o slug colado manualmente.
+- O vínculo é gravado no `identity-service` (`customer_stores`), porque é lá que vivem as contas de cliente. O `tenant-service` continua dono do diretório de lojas e do tema.
+- `POST /api/customers/me/stores` é **idempotente**: abrir o mesmo link duas vezes não duplica; o índice único é `(user_id, slug)`. O limite é de 50 lojas por cliente (`409`).
+- Com **uma** loja vinculada o app abre o cardápio direto; com **duas ou mais** mostra a lista inicial. Trocar de loja limpa o carrinho e avisa o cliente.
+- Pedidos continuam sendo do `order-service` e o histórico é global (todas as lojas), com o nome da loja exibido no card e na comanda.
+- O vínculo é removido em `DELETE /api/customers/me/stores/{slug}`; se a loja removida era a ativa, o app volta para a lista.
 
 ---
 

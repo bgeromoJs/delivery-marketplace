@@ -4,7 +4,7 @@
 |---|---|
 | Status | Implementado, com lacunas de contrato e autorização |
 | Público | Desenvolvedores de frontend, mobile, integrações e QA |
-| Última revisão | 2026-10-26 |
+| Última revisão | 2026-10-28 |
 | Fonte de verdade | Controllers, DTOs, configurações de segurança e respostas observáveis |
 | Especificação gerada | OpenAPI via springdoc em cada serviço |
 
@@ -114,6 +114,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
 | `/api/auth/admin/**` | Não | Sim | Não | Não | Não | Não |
 | `GET /api/tenants/**` | Sim | Sim | Sim | Sim | Sim | Sim |
 | `POST/PUT/PATCH /api/tenants/**` | Não | Sim | Não | Não | Não | Não |
+| `/api/customers/**` | Não | Não | Não | Não | Não | Sim |
 | `/api/catalog/**` | Sim | Sim | Sim | Sim | Sim | Sim |
 | `/api/orders/**` | Sim | Sim | Sim | Sim | Sim | Sim |
 | `/api/store/**` | Sim | Sim | Sim | Sim | Sim | Sim |
@@ -333,6 +334,107 @@ Não altera senha, papel, `tenantId` nem situação.
 - O ator vem do JWT (`sub`, `email`), nunca do corpo.
 - `GET` retorna os 100 eventos mais recentes.
 
+### 3.7 Cliente — perfil, endereços e cartões
+
+Base: `/api/customers/me` — porta `8081`, encaminhado pelo gateway (`customer-service`). Todos os endpoints exigem `ROLE_CUSTOMER` e derivam o `userId` do `sub` do JWT; nenhum aceita `userId` no caminho ou no corpo.
+
+| Método | Caminho | Sucesso | Erros relevantes |
+|---|---|---|---|
+| `GET` | `` | `200` `CustomerProfileDto` | `403` conta não é `CUSTOMER` ou está inativa |
+| `PUT` | `` | `200` `CustomerProfileDto` | `400` validação |
+| `GET` | `/addresses` | `200` lista de `AddressDto` | `401`/`403` |
+| `POST` | `/addresses` | `200` `AddressDto` | `400` validação |
+| `PUT` | `/addresses/{id}` | `200` `AddressDto` | `400`; `404` endereço de outro cliente |
+| `DELETE` | `/addresses/{id}` | `204` | `404` |
+| `PATCH` | `/addresses/{id}/default` | `200` `AddressDto` | `404` |
+| `GET` | `/cards` | `200` lista de `CardDto` | `401`/`403` |
+| `POST` | `/cards` | `200` `CardDto` | `400` validação |
+| `PATCH` | `/cards/{id}/default` | `200` `CardDto` | `404` |
+| `DELETE` | `/cards/{id}` | `204` | `404` |
+
+Perfil (`GET`/`PUT`):
+
+```json
+{
+  "name": "Maria Cliente",
+  "phone": "+5511999990004",
+  "foodPreferences": ["VEGETARIAN", "GLUTEN_FREE"]
+}
+```
+
+- `foodPreferences` aceita `VEGETARIAN`, `VEGAN`, `GLUTEN_FREE` e `LACTOSE_FREE`; lista vazia remove as preferências. O app usa essas tags para filtrar o cardápio.
+- `googleLinked` informa se a conta já tem `google_sub`.
+
+Endereço (`POST`/`PUT`):
+
+```json
+{
+  "label": "Casa",
+  "street": "Rua das Flores",
+  "number": "120",
+  "complement": "Apto 32",
+  "district": "Centro",
+  "city": "São Paulo",
+  "state": "SP",
+  "zipCode": "01001000",
+  "reference": "Portão azul",
+  "isDefault": true
+}
+```
+
+Cartão (`POST`):
+
+```json
+{
+  "brand": "VISA",
+  "last4": "4242",
+  "holderName": "MARIA C SILVA",
+  "expiryMonth": 12,
+  "expiryYear": 2030,
+  "isDefault": true
+}
+```
+
+- O backend guarda apenas bandeira, quatro últimos dígitos, titular e validade. Número completo e CVV nunca são enviados nem armazenados.
+- `maskedNumber` é montado na resposta (`**** **** **** 4242`).
+
+### 3.8 Cliente — estabelecimentos (`/api/customers/me/stores`)
+
+A loja entra na lista quando o cliente abre o app pelo link do estabelecimento. O vínculo vale para a conta, não para o aparelho.
+
+| Método | Caminho | Auth | Sucesso | Erros relevantes |
+|---|---|---|---|---|
+| `GET` | `/api/customers/me/stores` | `CUSTOMER` | `200` lista de `CustomerStoreDto` | `403` conta inativa ou de outro perfil |
+| `POST` | `/api/customers/me/stores` | `CUSTOMER` | `200` `CustomerStoreDto` (cria ou devolve o existente) | `400` link inválido; `404` slug não existe no ambiente; `409` limite de 50 lojas; `503` tenant-service indisponível |
+| `DELETE` | `/api/customers/me/stores/{slug}` | `CUSTOMER` | `204` | `400` slug inválido (ignorado), `403` |
+
+Requisição:
+
+```json
+{
+  "slug": "deliveryhub://loja/vera-marmitex"
+}
+```
+
+- `slug` aceita o slug puro (`vera-marmitex`), `deliveryhub://loja/{slug}` ou a URL do site (`https://.../loja/{slug}`). O `CustomerStoreService` normaliza, valida `[a-z0-9][a-z0-9_-]{0,59}` e consulta `GET /api/tenants/{slug}/theme`.
+- **Idempotente**: o índice único `(user_id, slug)` garante que abrir o mesmo link duas vezes devolva o vínculo existente sem duplicar.
+- Limite de **50 lojas** por cliente (`MAX_STORES`), retornando `409`.
+- `POST` também é o caminho usado pelo app quando o cliente cola o link manualmente na aba **Lojas**.
+- Resposta:
+
+```json
+{
+  "id": "b1f0f2c4-0c1d-4d6e-9f12-0f0b7a1c9d33",
+  "tenantId": "398935eb-36c3-4574-acbc-3b37a6cefa61",
+  "slug": "vera-marmitex",
+  "name": "Vera Marmitex",
+  "logoUrl": "https://.../logo.png",
+  "createdAt": "2026-10-28T12:00:00"
+}
+```
+
+- `name` e `logoUrl` são o retrato do momento do vínculo; o app recarrega o tema ao vivo em `GET /api/tenants/{slug}/theme` para exibir taxa, prazo e avaliação atuais.
+
 ---
 
 ## 4. Tenant Service
@@ -522,6 +624,7 @@ Base: `/api/orders` — porta `8084`.
 | `GET` | `/api/orders/tenant/{tenantId}` | Público | `200` lista | Ordenado por `createdAt` desc. Expõe PII. |
 | `GET` | `/api/orders/tenant/{tenantId}/agenda?date=AAAA-MM-DD` | Público | `200` lista sanitizada | Agenda pública do dia, na ordem de execução. |
 | `GET` | `/api/orders/courier/{courierId}` | Público | `200` lista | — |
+| `GET` | `/api/orders/customer/{customerId}` | Público | `200` lista | Histórico do cliente em `createdAt` desc; consumido pelo app cliente Android. |
 | `GET` | `/api/orders/available-deliveries` | Público | `200` lista | `READY` e `courierId` nulo. |
 | `GET` | `/api/orders` | Público | `200` lista | **Todos os pedidos.** |
 | `PATCH` | `/api/orders/{id}/status` | Público | `200` `Order` | Status e courier livres. |
@@ -653,6 +756,7 @@ Content-Type: application/json
 - A consulta lista as janelas de hoje até `app.scheduling.max-days-ahead` dias à frente (default `7`).
 - `availableStart`/`availableEnd` são o primeiro encaixe; `remainingMinutes` considera os intervalos já ocupados.
 - Apenas a primeira janela disponível recebe `recommended = true`.
+- O app cliente Android (`ui/CartScreen.kt`) lista apenas janelas com `available = true`, pré-seleciona a `recommended` e mostra o encaixe e os minutos livres.
 - `400` se `tenantId` ou `items` faltarem; `409` se não existir janela comum aos itens.
 
 #### Agenda pública do dia
@@ -683,7 +787,8 @@ GET /api/orders/tenant/{tenantId}/agenda?date=2026-10-26
 - Inclui pedidos não `CANCELLED` cujo intervalo de produção toca o dia consultado.
 - A ordem é a de execução: `scheduledStart`, depois `preparingAt`, depois `createdAt`; `position` começa em `1`.
 - O payload é **sanitizado**: não expõe nome, telefone, endereço nem valores. O cliente reconhece o próprio pedido pelo `number`.
-- O app vendedor Android consome este mesmo endpoint na aba Agenda (`ui/agenda/AgendaScreen.kt`): seletor de dia, resumo de pedidos/cozinha/esforço, lista na ordem de execução, pull-to-refresh e polling de 30 s. O app não usa SSE para a agenda.
+- A web do cliente (`/loja/{slug}/agenda`) e o app vendedor (`ui/agenda/AgendaScreen.kt`) consomem este endpoint: seletor de dia, resumo de pedidos/cozinha/esforço, lista na ordem de execução e polling de 30 s, com pull-to-refresh. O app cliente Android **não** consome a agenda; ele lista o histórico em `GET /api/orders/customer/{customerId}`.
+- Nenhum dos dois clientes usa SSE para a agenda.
 - Não há autenticação nem paginação. Ver risco de enumeração em [`06-seguranca.md`](06-seguranca.md#43-lacunas-de-autorização).
 
 #### Regras de encaixe
@@ -1087,6 +1192,9 @@ Regras:
 | 26 | SSE sem replay | Eventos perdidos em reconexão | `SseOrderEventRegistry` | `Last-Event-ID` ou recarga explícita |
 | 27 | Agenda pública sem autenticação | Terceiros enumeram números, status e itens de uma loja | `GET /api/orders/tenant/{tenantId}/agenda` | Token de cliente ou link assinado com escopo por loja |
 | 28 | Agenda em horário local | Sem fuso, DST ou loja em outro fuso | `LocalDateTime.now()` no `SchedulingService` | Definir `ZoneId` por tenant e persistir com offset |
+| 29 | Sem rastreamento do entregador | Cliente não vê posição nem rota em tempo real | `Order` não tem coordenadas; `Tracking` está **Planejado** | Endpoint de posição do entregador + app/coletores de GPS e geocodificação do endereço |
+| 30 | Lista de clientes da loja não exposta | O vínculo é gravado (`customer_stores.tenant_id`) e o vendedor não consulta quem abriu o link | `CustomerStoreRepository.findByTenantIdOrderByCreatedAtDesc` sem controller | Endpoint `/api/store/me/customers` com escopo por JWT e consentimento/LGPD explícito |
+| 31 | Link público sem token de convite | Qualquer cliente pode adicionar qualquer loja ativa se souber o slug | `POST /api/customers/me/stores` valida o slug, não um convite | Assinatura/expiração no link ou cupom de convite por loja |
 
 ---
 
@@ -1109,7 +1217,7 @@ Regras:
 - [ ] Não assuma que `GET /api/store/me/*` retorna apenas a loja do usuário.
 - [ ] Não dependa de `distanceKm` ou `secondsToAccept` como dados reais.
 - [ ] Trate `409` do checkout como ausência de capacidade e ofereça outra janela.
-- [ ] Use `GET /agenda` apenas para acompanhamento: o payload é sanitizado e não traz o pedido completo.
+- [ ] Use `GET /agenda` apenas para acompanhamento operacional: o payload é sanitizado e não traz o pedido completo.
 - [ ] Não envie `courierId` que não seja UUID.
 - [ ] Não dependa de persistência de métodos de pagamento.
 - [ ] Não assuma idempotência em `POST /api/orders`.

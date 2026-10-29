@@ -4,7 +4,7 @@
 |---|---|
 | Status | Registro retroativo das decisões observadas no código |
 | Público | Engenharia, arquitetura e revisores |
-| Última revisão | 2026-10-27 |
+| Última revisão | 2026-10-28 |
 | Formato | [MADR 4.0](https://adr.github.io/madr/) adaptado |
 | Fonte de verdade | Código e configurações atuais |
 
@@ -43,6 +43,7 @@ Sem esse registro, cada refatoração futura rediscute decisões já tomadas ou,
 | [0013](0013-compose-unico-com-tudo.md) | Compose único com infraestrutura, backend e frontend | Aceito | Operacional |
 | [0014](0014-remocao-do-agregador-maven.md) | Remoção do agregador Maven em `backend/` | Aceito | Estrutural |
 | [0015](0015-limites-de-memoria-por-container.md) | Limites de memória por container | Aceito | Operacional |
+| [0016](0016-app-cliente-multi-loja-com-vinculo-por-link.md) | App cliente multi-loja com vínculo da loja pelo link | Aceito | Produto, identidade, dados e Android |
 
 ### 2.1 Decisões que faltam registrar
 

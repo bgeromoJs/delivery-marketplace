@@ -4,7 +4,7 @@
 |---|---|
 | Status | Verificação automatizada mínima; sem CI versionado |
 | Público | Engenharia, QA, produto e revisores |
-| Última revisão | 2026-10-26 |
+| Última revisão | 2026-10-28 |
 | Escopo | Inventário de testes, estratégia, cenários, portões de CI e critérios de aceite |
 | Fonte de verdade | `src/test`, `package.json`, `build.gradle.kts` e código de produção |
 
@@ -241,6 +241,11 @@ Cada defeito conhecido precisa de um teste que falhe antes da correção e passe
 | R15 | Administrador pode voltar a se trancar fora | Auto-desativação, auto-rebaixamento ou remoção do último `ADMIN` ativo → `409` |
 | R16 | Erro do identity pode voltar a ser corpo genérico | Resposta de erro contém `message`/`detail`; validação contém `errors[]` |
 | R17 | Senha inicial pode voltar a aceitar menos de 8 caracteres | `POST /api/auth/admin/users` com senha curta → `400` com mensagem do campo `password` |
+| R18 | Link da loja pode voltar a duplicar o vínculo | `POST /api/customers/me/stores` duas vezes com o mesmo slug → um registro; `GET` retorna uma loja |
+| R19 | Link pode voltar a aceitar loja inexistente | Slug fora do tenant-service → `404`; nenhum registro em `customer_stores` |
+| R20 | Vinculo pode voltar a aceitar slug de outro formato | `slug` vazio, com espaços ou caracteres inválidos → `400`; URL completa é normalizada para o slug |
+| R21 | Vínculo pode voltar a vazar entre clientes | Token do cliente A não lista, remove nem cria vínculo do cliente B; `userId` vem do `sub` |
+| R22 | Indisponibilidade do tenant pode voltar a criar loja fantasma | tenant-service fora do ar → `503` e nenhum `INSERT` em `customer_stores` |
 
 > Enquanto R1–R17 não estiverem cobertos, qualquer alteração em autenticação, gestão de usuários, pedidos ou `/api/store` é uma mudança de alto risco. R1, R12–R17 foram verificados manualmente contra o identity-service em 2026-10-26; ainda não há teste automatizado.
 
@@ -257,6 +262,14 @@ Formato: **estímulo → resposta esperada → medida**. As metas são propostas
 | Cliente finaliza pedido com Pix | Pedido criado com status `PENDING`, total correto | 100% dos itens obrigatórios presentes |
 | Vendedor aceita pedido | Status muda para `ACCEPTED` e evento SSE é emitido | Latência < 1 s |
 | Vendedor abre a aba Agenda no Android | Pedidos do dia na ordem de execução, sem dados pessoais | Dia selecionado respeitado; atualização em 30 s |
+| Cliente abre o app Android sem sessão | Tela de login em tela cheia com a identidade da loja quando veio por link; cardápio, carrinho e pedidos ficam bloqueados até autenticar | 100% das abas protegidas; login `CUSTOMER` obrigatório |
+| Cliente abre o link `deliveryhub://loja/{slug}` com sessão | Loja validada no servidor, vinculada à conta e cardápio aberto | 1 vínculo por slug (idempotente); slug inexistente mostra erro e não cria vínculo |
+| Cliente com uma única loja abre o app | Cardápio direto, sem passar pela lista | 0 toques extras; lista só aparece com 2+ lojas ou pela aba **Lojas** |
+| Cliente com duas ou mais lojas abre o app | Lista inicial com logo, nota, taxa e prazo de cada loja | Tema ao vivo de cada loja carregado; falha de tema não esconde a loja |
+| Cliente troca de loja com itens no carrinho | Carrinho é limpo e o cliente vê aviso | 0 itens da loja anterior no checkout |
+| Cliente abre a aba Pedidos no app Android | Histórico do mais recente para o mais antigo, com status e total | Ordem decrescente por `createdAt`; atualização em 30 s |
+| Cliente abre a comanda de um pedido | Linha do tempo do status, itens, valores, pagamento e endereço | Status atual destacado; cancelado mostra aviso próprio |
+| Cliente escolhe janela no checkout do app | Apenas janelas `available` aparecem e a `recommended` vem pré-selecionada | Nenhuma janela cheia selecionável |
 | Entregador consulta entregas disponíveis | Lista apenas pedidos prontos e sem entregador | 0 pedidos inelegíveis |
 
 ### 5.2 Eficiência de desempenho

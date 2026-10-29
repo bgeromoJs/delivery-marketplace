@@ -4,7 +4,7 @@
 |---|---|
 | Status | Polyrepo com submódulos implementado; processo de contribuição não formalizado |
 | Público | Engenharia, revisores e novos contribuidores |
-| Última revisão | 2026-10-27 |
+| Última revisão | 2026-10-28 |
 | Escopo | Estrutura, convenções, fluxo de PR, mudanças de API, ADRs e checklists |
 | Fonte de verdade | Código, `package.json`, POMs, `tsconfig.json`, `eslint.config.mjs` e `AGENTS.md` |
 
@@ -198,6 +198,27 @@ Template recomendado:
 
 Tamanho alvo: ≤ 400 linhas alteradas. PRs maiores devem ser divididos ou justificados.
 
+### 2.4 Build verde, commit e push
+
+O agente e o mantenedor fecham a tarefa com o ciclo **build → commit → push**. A regra está em [`.agents/skills/commit-e-push-apos-build/SKILL.md`](../../.agents/skills/commit-e-push-apos-build/SKILL.md) e vale para a raiz e para cada submódulo alterado.
+
+| Repositório alterado | Gate antes do commit |
+|---|---|
+| Serviço em `backend/*` | `.\mvnw.cmd -DskipTests package` |
+| `frontend` | `npm run lint` + `npm run build` |
+| `mobile/cliente-android`, `mobile/vendedor-android` | `.\gradlew.bat :app:assembleDebug` |
+| Raiz com `docker-compose.yml` | `docker compose config -q` |
+| Raiz só com Markdown | Links e âncoras válidos |
+
+Regras:
+
+- Build vermelho não vira commit; o working tree fica intacto e o erro é relatado.
+- Stage por caminho explícito: `git add -A` na raiz captura artefatos locais e trabalho de outra tarefa.
+- Submódulos são commitados e enviados **antes** da raiz, porque o guarda-chuva referencia o SHA de cada um; depois de enviar, a raiz recebe o ponteiro novo.
+- `git push origin HEAD` na branch atual, sem `--force`, sem tags e sem rebase automático.
+- Push que falha por rede ou credencial mantém o commit local e é relatado como **não enviado**.
+- Um commit por repositório e por intenção, no formato Conventional Commits da seção [2.2](#22-commits).
+
 ---
 
 ## 3. Convenções do backend
@@ -340,13 +361,14 @@ Regras:
 | JVM | 17 |
 | HTTP | Retrofit 2.11 + OkHttp 4.12 + Moshi |
 | Tempo real | OkHttp SSE (`okhttp-sse`) em `OrderEventsRepository` |
-| Agenda | `AgendaScreen` + `GET /api/orders/tenant/{tenantId}/agenda` (polling de 30 s) |
+| Agenda | `ui/agenda/AgendaScreen.kt` (vendedor) + `GET /api/orders/tenant/{tenantId}/agenda` (polling de 30 s) |
 | Sessão | `EncryptedSharedPreferences` |
 | Base URL debug | `http://10.0.2.2:8080/api/` |
+| Deep links (cliente) | `deliveryhub://loja/{slug}` e `https://.../loja/{slug}` → `storeSlugFromUri` → `POST /api/customers/me/stores` |
 
 Regras:
 
-- ViewModels expõem estado observável ao Compose com `mutableStateOf`/`mutableStateListOf`; a UI lê o estado diretamente. `StateFlow`/`collectAsStateWithLifecycle` é o alvo para novas telas.
+- O app vendedor expõe estado ao Compose com `mutableStateOf`/`mutableStateListOf`; o app cliente usa `MutableStateFlow` + `collectAsState`. Novas telas devem seguir `StateFlow`.
 - Chamadas de rede em `Dispatchers.IO`, nunca na main thread.
 - O token é anexado por interceptor; não repita o header em cada chamada.
 - Não logue corpo de requisição em release (`logging-interceptor` apenas em debug).
@@ -354,7 +376,8 @@ Regras:
 - Novas telas devem ter `preview` e conteúdo de teste.
 - O stream SSE segue o ciclo de vida do app: abre após o login, fecha ao sair e reconecta com backoff exponencial. Ao reconectar, recarregue a fila para cobrir eventos perdidos.
 - Alertas de novo pedido usam vibração e som; não dispare notificação para pedidos de balcão criados pelo próprio vendedor.
-- A aba Agenda usa o endpoint público sanitizado, respeita o dia selecionado e atualiza a cada 30 s enquanto visível. Ações na fila recarregam a agenda em silêncio quando ela já foi carregada.
+- A aba Agenda dos dois apps usa o endpoint público sanitizado, respeita o dia selecionado e atualiza a cada 30 s enquanto visível. Ações na fila recarregam a agenda do vendedor em silêncio quando ela já foi carregada; o app cliente destaca os pedidos cujo `orderNumber` está na lista do próprio cliente.
+- O app cliente **não** é white-label: não existe `STORE_SLUG`/`STORE_NAME` no build. A loja chega pelo link e é validada no servidor; `APP_NAME` é só o rótulo do app. O `MainActivity` usa `launchMode="singleTop"` e `onNewIntent` para reaproveitar a sessão, e o link é entregue ao Compose por `MutableSharedFlow<StoreLinkEvent>` com replay e guarda de `nonce` (não reabre a loja em rotação, mas reabre no mesmo link tocado de novo).
 
 ---
 
@@ -531,6 +554,8 @@ Não há versionamento de API (`/v1`). A recomendação é introduzir `/api/v1/*
 - [ ] Sem `Log` de token ou corpo sensível.
 - [ ] Base URL correta por build type.
 - [ ] Estados de erro e reconexão SSE tratados.
+- [ ] Deep links novos declarados no manifesto e testados com `adb shell am start -a android.intent.action.VIEW -d ...`.
+- [ ] Nenhum dado de loja fixo no build (`STORE_SLUG`, slug em constante ou string de marca por loja).
 
 ### Documentação e segurança
 
@@ -539,6 +564,7 @@ Não há versionamento de API (`/v1`). A recomendação é introduzir `/api/v1/*
 - [ ] Nenhum segredo, token ou dado pessoal no diff.
 - [ ] Links relativos válidos.
 - [ ] Data de revisão atualizada.
+- [ ] Build do repositório alterado verde, commit e push feitos ([§2.4](#24-build-verde-commit-e-push)).
 
 ---
 
